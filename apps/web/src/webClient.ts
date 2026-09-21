@@ -434,6 +434,36 @@ export class WebHeliconClient implements HeliconClient {
     return this.assetUrl(`/api/files/raw?cwd=${enc(cwd)}&path=${enc(path)}`);
   }
 
+  async listBrowserTabs(sessionId: string): Promise<import("@helicon/ui").BrowserTabSnapshot[]> {
+    return (await call<{ tabs: import("@helicon/ui").BrowserTabSnapshot[] }>("GET", `/api/sessions/${enc(sessionId)}/browser/tabs`)).tabs;
+  }
+
+  async openBrowserTab(sessionId: string, url?: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs`, { url })).tab;
+  }
+
+  async navigateBrowserTab(sessionId: string, tabId: string, url: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (
+      await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/navigate`, { url })
+    ).tab;
+  }
+
+  async reloadBrowserTab(sessionId: string, tabId: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/reload`, {})).tab;
+  }
+
+  async closeBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    await call("DELETE", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}`);
+  }
+
+  async listDiscoveredServers(): Promise<{ url: string; title: string | null }[]> {
+    return (await call<{ servers: { url: string; title: string | null }[] }>("GET", "/api/browser/discovered")).servers;
+  }
+
+  browserStreamUrl(sessionId: string, tabId: string): string {
+    return url(`/api/browser/stream?sessionId=${enc(sessionId)}&tabId=${enc(tabId)}`);
+  }
+
   /**
    * A server path the browser loads by itself, like an attachment's bytes. It carries no token: the
    * cookie from the handshake is what lets these through, so nothing secret ends up in an `img` tag.
@@ -481,6 +511,34 @@ export class WebHeliconClient implements HeliconClient {
         this.dispatch(JSON.parse((message as MessageEvent<string>).data) as HeliconEvent);
       } catch {
         /* ignore malformed frames */
+      }
+    });
+    source.addEventListener("browser", (message) => {
+      this.touch();
+      try {
+        const data = JSON.parse((message as MessageEvent<string>).data) as {
+          sessionId: string;
+          method: string;
+          params: Record<string, unknown>;
+          at: number;
+        };
+        this.dispatch({ type: "browser", ...data });
+      } catch {
+        /* ignore */
+      }
+    });
+    source.addEventListener("browser-work", (message) => {
+      this.touch();
+      try {
+        const data = JSON.parse((message as MessageEvent<string>).data) as {
+          sessionId: string;
+          verb: string;
+          detail: Record<string, unknown>;
+          at: number;
+        };
+        this.dispatch({ type: "browser-work", ...data });
+      } catch {
+        /* ignore */
       }
     });
     // The server's heartbeat: proof the stream is still carrying, and nothing else.

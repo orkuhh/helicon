@@ -316,6 +316,38 @@ class FakeClient implements HeliconClient {
   fileUrl(cwd: string, path: string) {
     return `/raw?${cwd}&${path}`;
   }
+  async listBrowserTabs() {
+    return [];
+  }
+  async openBrowserTab() {
+    return {
+      tabId: "tab1",
+      url: "about:blank",
+      title: "",
+      loading: false,
+      failed: null,
+      profileId: "default",
+      muted: false,
+      audible: false,
+      controller: "none" as const,
+      viewport: { mode: "fill", width: 1280, height: 720, presetId: null, zoom: 1 },
+      colorScheme: "system" as const,
+      faviconDataUrl: null,
+    };
+  }
+  async navigateBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async reloadBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async closeBrowserTab() {}
+  async listDiscoveredServers() {
+    return [];
+  }
+  browserStreamUrl() {
+    return "/api/browser/stream";
+  }
   subscribe(handler: EventHandler) {
     this.handler = handler;
     return () => {

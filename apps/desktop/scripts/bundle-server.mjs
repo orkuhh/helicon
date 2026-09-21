@@ -19,5 +19,6 @@ await esbuild.build({
   format: "cjs",
   outfile: join(resourcesDir, "server.cjs"),
   logLevel: "info",
+  external: ["playwright-core", "chromium-bidi"],
 });
 console.log("bundled desktop resources into src-tauri/resources");

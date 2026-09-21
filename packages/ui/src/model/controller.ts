@@ -43,6 +43,8 @@ import {
   type ThreadFold,
 } from "./fold.js";
 import {
+  BROWSER_WIDTH_MAX,
+  BROWSER_WIDTH_MIN,
   FILES_WIDTH_MAX,
   FILES_WIDTH_MIN,
   Store,
@@ -64,6 +66,7 @@ import {
   type ThreadState,
   type Toast,
 } from "./store.js";
+import { emptyBrowserSession } from "./browser.js";
 import { NotificationManager, type Notifier } from "./notify.js";
 import { UpdateManager, type AppUpdater } from "./updates.js";
 
@@ -785,6 +788,23 @@ export class HeliconController {
       }
       case "shell-run":
         this.addShellRun(event.sessionId, event.run);
+        break;
+      case "browser": {
+        const tab = event.params["tab"] as import("../types.js").BrowserTabSnapshot | undefined;
+        if (tab) {
+          this.patchBrowser(event.sessionId, (b) => ({
+            ...b,
+            tabs: b.tabs.some((t) => t.tabId === tab.tabId)
+              ? b.tabs.map((t) => (t.tabId === tab.tabId ? tab : t))
+              : [...b.tabs, tab],
+            activeTabId: b.activeTabId ?? tab.tabId,
+            loading: false,
+            unreachable: tab.failed,
+          }));
+        }
+        break;
+      }
+      case "browser-work":
         break;
       case "sessions-changed":
         this.scheduleRefresh();
@@ -2677,6 +2697,119 @@ export class HeliconController {
     this.setPrefs({ sidebarCollapsed: !this.state.prefs.sidebarCollapsed });
   }
 
+  // ---------------------------------------------------------------- browser
+
+  toggleBrowser(open?: boolean): void {
+    const next = open ?? !this.state.prefs.browserOpen;
+    this.setPrefs({ browserOpen: next, rightSideTab: next ? "browser" : this.state.prefs.rightSideTab });
+  }
+
+  setRightSideTab(tab: "files" | "browser"): void {
+    this.setPrefs({
+      rightSideTab: tab,
+      filesOpen: tab === "files" ? true : this.state.prefs.filesOpen,
+      browserOpen: tab === "browser" ? true : this.state.prefs.browserOpen,
+    });
+  }
+
+  setBrowserWidth(width: number): void {
+    this.setPrefs({ browserWidth: Math.round(Math.min(BROWSER_WIDTH_MAX, Math.max(BROWSER_WIDTH_MIN, width))) });
+  }
+
+  private patchBrowser(sessionId: string, fn: (state: import("./browser.js").BrowserSessionState) => import("./browser.js").BrowserSessionState): void {
+    this.update((s) => {
+      const current = s.browser[sessionId] ?? emptyBrowserSession();
+      return { ...s, browser: { ...s.browser, [sessionId]: fn(current) } };
+    });
+  }
+
+  async ensureBrowser(sessionId: string): Promise<void> {
+    try {
+      const [tabs, servers] = await Promise.all([
+        this.client.listBrowserTabs(sessionId),
+        this.client.listDiscoveredServers(),
+      ]);
+      const activeTabId = tabs[0]?.tabId ?? null;
+      this.patchBrowser(sessionId, (b) => ({
+        ...b,
+        tabs,
+        activeTabId,
+        discovered: servers,
+        loading: false,
+      }));
+      if (activeTabId) {
+        this.attachBrowserStream(sessionId, activeTabId);
+      }
+    } catch (error) {
+      this.toast("error", "Browser unavailable", errorMessage(error));
+    }
+  }
+
+  private frameSources = new Map<string, EventSource>();
+
+  private attachBrowserStream(sessionId: string, tabId: string): void {
+    const key = `${sessionId}:${tabId}`;
+    this.frameSources.get(key)?.close();
+    const source = new EventSource(this.client.browserStreamUrl(sessionId, tabId), { withCredentials: true });
+    source.addEventListener("frame", (message) => {
+      try {
+        const frame = JSON.parse((message as MessageEvent<string>).data) as { dataUrl: string };
+        this.patchBrowser(sessionId, (b) => ({ ...b, frameDataUrl: frame.dataUrl }));
+      } catch {
+        /* ignore */
+      }
+    });
+    this.frameSources.set(key, source);
+  }
+
+  setBrowserTab(sessionId: string, tabId: string): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, activeTabId: tabId }));
+    this.attachBrowserStream(sessionId, tabId);
+  }
+
+  async openBrowserTab(sessionId: string, url?: string): Promise<void> {
+    const tab = await this.client.openBrowserTab(sessionId, url);
+    this.patchBrowser(sessionId, (b) => ({
+      ...b,
+      tabs: [...b.tabs, tab],
+      activeTabId: tab.tabId,
+    }));
+    this.setPrefs({ browserOpen: true, rightSideTab: "browser" });
+    this.attachBrowserStream(sessionId, tab.tabId);
+  }
+
+  async navigateBrowser(sessionId: string, tabId: string, url: string): Promise<void> {
+    this.patchBrowser(sessionId, (b) => ({ ...b, loading: true }));
+    const tab = await this.client.navigateBrowserTab(sessionId, tabId, url);
+    this.patchBrowser(sessionId, (b) => ({
+      ...b,
+      tabs: b.tabs.map((t) => (t.tabId === tabId ? tab : t)),
+      loading: false,
+      unreachable: tab.failed,
+    }));
+  }
+
+  async reloadBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    const tab = await this.client.reloadBrowserTab(sessionId, tabId);
+    this.patchBrowser(sessionId, (b) => ({
+      ...b,
+      tabs: b.tabs.map((t) => (t.tabId === tabId ? tab : t)),
+    }));
+  }
+
+  async closeBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    await this.client.closeBrowserTab(sessionId, tabId);
+    this.frameSources.get(`${sessionId}:${tabId}`)?.close();
+    this.patchBrowser(sessionId, (b) => {
+      const tabs = b.tabs.filter((t) => t.tabId !== tabId);
+      return { ...b, tabs, activeTabId: tabs[0]?.tabId ?? null };
+    });
+  }
+
+  browserHumanInput(sessionId: string, tabId: string): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, controller: "human" }));
+  }
+
   // ---------------------------------------------------------------- files
 
   /** Shows or hides the file viewer beside threads; it keeps each thread's open files either way. */
@@ -2705,6 +2838,13 @@ export class HeliconController {
     if (!cwd || !target || !target.path) {
       return false;
     }
+    const ext = target.path.split(".").pop()?.toLowerCase() ?? "";
+    if (ext === "html" || ext === "htm" || ext === "pdf") {
+      const previewUrl = this.client.fileUrl(cwd, target.path);
+      void this.openBrowserTab(sessionId, previewUrl);
+      this.setPrefs({ rightSideTab: "browser", browserOpen: true });
+      return true;
+    }
     this.patchPanel(sessionId, (panel) => ({
       tabs: panel.tabs.includes(target.path) ? panel.tabs : [...panel.tabs, target.path],
       active: target.path,
@@ -2712,7 +2852,7 @@ export class HeliconController {
       line: line ?? target.line,
     }));
     if (!this.state.prefs.filesOpen) {
-      this.setPrefs({ filesOpen: true });
+      this.setPrefs({ filesOpen: true, rightSideTab: "files" });
     }
     return true;
   }

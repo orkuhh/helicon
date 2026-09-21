@@ -1,4 +1,4 @@
-import { Archive, CircleStop, Code, Copy, Ellipsis, Folder, FolderOpen, FolderTree, PanelBottomOpen, GitBranch, Lock, Minimize2, Pencil, ShieldOff, Square, SquarePen } from "lucide-react";
+import { Archive, CircleStop, Code, Copy, Ellipsis, Folder, FolderOpen, FolderTree, Globe, PanelBottomOpen, GitBranch, Lock, Minimize2, Pencil, ShieldOff, Square, SquarePen } from "lucide-react";
 import { useRef, useState, type KeyboardEvent } from "react";
 import { useApp, useController, useNow } from "../../app/context.js";
 import { CaptionSpacer, useOverlayDragProps } from "../../app/frame.js";
@@ -15,13 +15,15 @@ import { GoalPanel } from "./GoalPanel.js";
 import { revealLabel } from "../sidebar/Sidebar.js";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, Tip } from "../ui/overlays.js";
 import { Button, IconButton, MOD, Spinner } from "../ui/primitives.js";
-import { FilesPanel } from "../files/FilesPanel.js";
+import { RightSidePanel } from "../browser/RightSidePanel.js";
 import { Transcript } from "./Transcript.js";
 
 export function ThreadView(props: { sessionId: string }) {
   const session = useApp((s) => s.sessions[props.sessionId] ?? null);
   const thread = useApp((s) => s.threads[props.sessionId] ?? null);
   const filesOpen = useApp((s) => s.prefs.filesOpen);
+  const browserOpen = useApp((s) => s.prefs.browserOpen);
+  const rightOpen = filesOpen || browserOpen;
   if (!session) {
     return <MissingThread />;
   }
@@ -34,7 +36,7 @@ export function ThreadView(props: { sessionId: string }) {
           {thread ? <Transcript sessionId={props.sessionId} thread={thread} /> : <div className="min-h-0 flex-1" />}
           <Dock session={session} thread={thread} running={running} />
         </div>
-        {filesOpen ? <FilesPanel sessionId={props.sessionId} cwd={session.cwd} /> : null}
+        {rightOpen ? <RightSidePanel sessionId={props.sessionId} cwd={session.cwd} /> : null}
       </div>
     </div>
   );
@@ -51,6 +53,7 @@ function ThreadHeader(props: { session: SessionSummary; thread: ThreadState | nu
   const drag = useOverlayDragProps();
   const noDrag = useOverlayDragProps("off");
   const filesOpen = useApp((s) => s.prefs.filesOpen);
+  const browserOpen = useApp((s) => s.prefs.browserOpen);
   return (
     <header data-drag-region {...drag} className="@container flex h-12 shrink-0 items-center gap-1.5 overflow-hidden border-b border-line px-3">
       <TrafficLightSpacer />
@@ -121,6 +124,11 @@ function ThreadHeader(props: { session: SessionSummary; thread: ThreadState | nu
         </Tip>
       ) : null}
       <HiddenCardsButton sessionId={session.sessionId} running={props.running} />
+      <Tip label={browserOpen ? "Hide browser" : "Show browser"} shortcut={[MOD, "Shift", "B"]}>
+        <IconButton label={browserOpen ? "Hide browser" : "Show browser"} active={browserOpen} onClick={() => controller.toggleBrowser()}>
+          <Globe size={16} />
+        </IconButton>
+      </Tip>
       <Tip label={filesOpen ? "Hide files" : "Show files"} shortcut={[MOD, "Shift", "E"]}>
         <IconButton label={filesOpen ? "Hide files" : "Show files"} active={filesOpen} onClick={() => controller.toggleFiles()}>
           <FolderTree size={15} />

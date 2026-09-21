@@ -480,6 +480,21 @@ export interface TranscriptLoad {
   readOnlyReason: string | null;
 }
 
+export interface BrowserTabSnapshot {
+  tabId: string;
+  url: string;
+  title: string;
+  loading: boolean;
+  failed: string | null;
+  profileId: string;
+  muted: boolean;
+  audible: boolean;
+  controller: "none" | "human" | "agent";
+  viewport: { mode: string; width: number; height: number; presetId: string | null; zoom: number };
+  colorScheme: "system" | "light" | "dark";
+  faviconDataUrl: string | null;
+}
+
 export type HeliconEvent =
   | { type: "hello"; version: string }
   | { type: "msp"; sessionId: string; method: string; params: Record<string, unknown>; at: number }
@@ -488,4 +503,6 @@ export type HeliconEvent =
   | { type: "shell-run"; sessionId: string; run: ShellRun }
   | { type: "plan-usage"; usage: PlanUsage; accountId: string | null }
   | { type: "host"; key: string; state: string; message: string }
-  | { type: "connection"; state: "open" | "lost" };
+  | { type: "connection"; state: "open" | "lost" }
+  | { type: "browser"; sessionId: string; method: string; params: Record<string, unknown>; at: number }
+  | { type: "browser-work"; sessionId: string; verb: string; detail: Record<string, unknown>; at: number };

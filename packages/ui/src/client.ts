@@ -162,6 +162,13 @@ export interface HeliconClient {
   openFileExternally(cwd: string, path: string): Promise<void>;
   /** Where the browser loads a project file's bytes from, for images, video, audio and PDFs. */
   fileUrl(cwd: string, path: string): string;
+  listBrowserTabs(sessionId: string): Promise<import("./types.js").BrowserTabSnapshot[]>;
+  openBrowserTab(sessionId: string, url?: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  navigateBrowserTab(sessionId: string, tabId: string, url: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  reloadBrowserTab(sessionId: string, tabId: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  closeBrowserTab(sessionId: string, tabId: string): Promise<void>;
+  listDiscoveredServers(): Promise<{ url: string; title: string | null }[]>;
+  browserStreamUrl(sessionId: string, tabId: string): string;
   /** Subscribe to server events; returns an unsubscribe function. */
   subscribe(handler: EventHandler): () => void;
 }
