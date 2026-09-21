@@ -169,6 +169,14 @@ export interface HeliconClient {
   closeBrowserTab(sessionId: string, tabId: string): Promise<void>;
   listDiscoveredServers(): Promise<{ url: string; title: string | null }[]>;
   browserStreamUrl(sessionId: string, tabId: string): string;
+  browserPipUrl(sessionId: string, tabId: string): string;
+  startBrowserPick(sessionId: string, tabId: string): Promise<void>;
+  cancelBrowserPick(sessionId: string, tabId: string): Promise<void>;
+  captureBrowserScreenshot(sessionId: string, tabId: string): Promise<string>;
+  startBrowserRecording(sessionId: string, tabId: string): Promise<void>;
+  stopBrowserRecording(sessionId: string, tabId: string): Promise<{ path: string; bytes: number }>;
+  sendBrowserPointer(sessionId: string, tabId: string, x: number, y: number, canvasWidth: number, canvasHeight: number): Promise<void>;
+  listBrowserDownloads(): Promise<{ id: string; url: string; suggestedFilename: string; path: string; at: string }[]>;
   /** Subscribe to server events; returns an unsubscribe function. */
   subscribe(handler: EventHandler): () => void;
 }

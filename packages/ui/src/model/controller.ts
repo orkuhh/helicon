@@ -809,7 +809,14 @@ export class HeliconController {
           ...b,
           workLog: [...b.workLog, { verb: event.verb, detail: event.detail, at: event.at }].slice(-200),
           controller: event.verb.startsWith("preview_") ? "agent" : b.controller,
+          agentCursor: event.verb === "preview_click" && typeof event.detail["x"] === "number"
+            ? { x: event.detail["x"] as number, y: event.detail["y"] as number, visible: true }
+            : b.agentCursor,
         }));
+        break;
+      case "browser-pick":
+        this.attachBrowserPick(event.sessionId, event.payload);
+        this.patchBrowser(event.sessionId, (b) => ({ ...b, pickActive: false }));
         break;
       case "sessions-changed":
         this.scheduleRefresh();
@@ -2289,6 +2296,17 @@ export class HeliconController {
         return true;
       case "init":
         return this.deliver(INIT_PROMPT, { ...options, displayText: typed });
+      case "browser": {
+        if (!sessionId) {
+          return false;
+        }
+        this.toggleBrowser(true);
+        this.setRightSideTab("browser");
+        if (args.trim()) {
+          void this.openBrowserTab(sessionId, args.trim());
+        }
+        return true;
+      }
       case "goal": {
         if (!args) {
           this.toast("info", "Add the goal after /goal", "For example: /goal get the test suite passing");
@@ -2816,6 +2834,94 @@ export class HeliconController {
   }
 
   browserHumanInput(sessionId: string, tabId: string): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, controller: "human" }));
+  }
+
+  private browserPipOpener: ((pipUrl: string) => Promise<void>) | null = null;
+
+  setBrowserPipOpener(opener: (pipUrl: string) => Promise<void>): void {
+    this.browserPipOpener = opener;
+  }
+
+  attachBrowserPick(sessionId: string, payload: Record<string, unknown>): void {
+    const png = typeof payload["pngBase64"] === "string" ? payload["pngBase64"] : null;
+    const label =
+      typeof payload["text"] === "string" && payload["text"]
+        ? payload["text"]
+        : typeof payload["selector"] === "string"
+          ? payload["selector"]
+          : "element";
+    const attachments: OutgoingAttachment[] = png
+      ? [{ name: "browser-pick.png", mediaType: "image/png", base64: png }]
+      : [];
+    const text = `Annotate this part of the page (${label})`;
+    this.update((s) => ({ ...s, draftHandoff: { key: sessionId, text, attachments, previews: [] } }));
+    this.toast("info", "Annotation ready", "Review the composer before sending.");
+  }
+
+  attachOsSnapshot(pngBase64: string): void {
+    const sessionId = this.state.route.kind === "thread" ? this.state.route.sessionId : null;
+    if (!sessionId) {
+      this.toast("info", "Open a thread", "Snapshots attach to the composer inside a thread.");
+      return;
+    }
+    this.update((s) => ({
+      ...s,
+      draftHandoff: {
+        key: sessionId,
+        text: "Here is a screenshot of my screen:",
+        attachments: [{ name: "snapshot.png", mediaType: "image/png", base64: pngBase64 }],
+        previews: [],
+      },
+    }));
+    this.toast("info", "Snapshot attached", "Review the composer before sending.");
+  }
+
+  async toggleBrowserPick(sessionId: string, tabId: string, active: boolean): Promise<void> {
+    if (active) {
+      await this.client.startBrowserPick(sessionId, tabId);
+    } else {
+      await this.client.cancelBrowserPick(sessionId, tabId);
+    }
+    this.patchBrowser(sessionId, (b) => ({ ...b, pickActive: active }));
+  }
+
+  async captureBrowserScreenshot(sessionId: string, tabId: string): Promise<void> {
+    const png = await this.client.captureBrowserScreenshot(sessionId, tabId);
+    this.attachBrowserPick(sessionId, { pngBase64: png, text: "screenshot", selector: "viewport" });
+  }
+
+  async toggleBrowserRecording(sessionId: string, tabId: string, recording: boolean): Promise<void> {
+    if (recording) {
+      await this.client.startBrowserRecording(sessionId, tabId);
+      this.patchBrowser(sessionId, (b) => ({ ...b, recording: true }));
+    } else {
+      const rec = await this.client.stopBrowserRecording(sessionId, tabId);
+      this.patchBrowser(sessionId, (b) => ({ ...b, recording: false }));
+      this.toast("info", "Recording saved", rec.path);
+    }
+  }
+
+  async openBrowserPip(sessionId: string, tabId: string): Promise<void> {
+    const pipUrl = this.client.browserPipUrl(sessionId, tabId);
+    if (this.browserPipOpener) {
+      await this.browserPipOpener(pipUrl);
+    } else {
+      window.open(pipUrl, "_blank", "noopener,noreferrer,width=480,height=300");
+    }
+  }
+
+  async browserCanvasPointer(
+    sessionId: string,
+    tabId: string,
+    clientX: number,
+    clientY: number,
+    canvas: HTMLCanvasElement,
+  ): Promise<void> {
+    const rect = canvas.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((clientY - rect.top) / rect.height) * canvas.height;
+    await this.client.sendBrowserPointer(sessionId, tabId, x, y, canvas.width, canvas.height);
     this.patchBrowser(sessionId, (b) => ({ ...b, controller: "human" }));
   }
 

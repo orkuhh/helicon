@@ -29,6 +29,9 @@ import { DEFAULT_VIEWPORT, MIN_VIEWPORT_DIM, MAX_VIEWPORT_AREA } from "./types.j
 import { isAllowedNavigationUrl, normalizePreviewUrl } from "./url.js";
 import { resolveEnvironmentPortUrl } from "./environmentPort.js";
 import { buildAutomationSnapshot, INTERACTIVE_EXTRACT_SCRIPT } from "./snapshot.js";
+import { finalizeRecordingFromJpegs } from "./recordingCompositor.js";
+import { HELICON_PICK_INIT_SCRIPT } from "./pickOverlay.js";
+import { stat } from "node:fs/promises";
 
 interface TabRuntime {
   snapshot: BrowserTabSnapshot;
@@ -40,6 +43,9 @@ interface TabRuntime {
   controllerEpoch: number;
   crashAttempts: number[];
   recordingPath: string | null;
+  recordingFrames: string[];
+  recordingActive: boolean;
+  pickBound: boolean;
 }
 
 function clampViewport(v: ViewportState): ViewportState {
@@ -230,6 +236,9 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
         controllerEpoch: 0,
         crashAttempts: [],
         recordingPath: null,
+        recordingFrames: [],
+        recordingActive: false,
+        pickBound: false,
       };
       tabs.set(tabId, runtime);
       page.on("popup", async (popup) => {
@@ -245,6 +254,9 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
           controllerEpoch: 0,
           crashAttempts: [],
           recordingPath: null,
+          recordingFrames: [],
+          recordingActive: false,
+          pickBound: false,
         });
       });
       page.on("crash", () => {
@@ -458,6 +470,18 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       if (!tab) {
         throw new Error("Tab not found");
       }
+      if (!tab.pickBound) {
+        tab.pickBound = true;
+        await tab.page.addInitScript(HELICON_PICK_INIT_SCRIPT);
+        await tab.page.evaluate(HELICON_PICK_INIT_SCRIPT);
+        try {
+          await tab.page.exposeFunction("heliconPickComplete", async (payload: Record<string, unknown>) => {
+            options.onPickComplete?.(tabId, payload);
+          });
+        } catch {
+          /* already exposed on this page */
+        }
+      }
       await tab.page.evaluate(`(() => {
         document.body.style.cursor = 'crosshair';
         window.__heliconPick = true;
@@ -475,6 +499,8 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       if (!tab) {
         throw new Error("Tab not found");
       }
+      tab.recordingFrames = [];
+      tab.recordingActive = true;
       tab.recordingPath = join(options.artifactsDir, `rec-${tabId}-${Date.now()}.webm`);
     },
     async stopRecording(tabId) {
@@ -482,9 +508,17 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       if (!tab) {
         throw new Error("Tab not found");
       }
-      const path = tab.recordingPath ?? join(options.artifactsDir, "empty.webm");
+      tab.recordingActive = false;
+      const out = tab.recordingPath ?? join(options.artifactsDir, `rec-${tabId}-${Date.now()}.webm`);
+      const result = await finalizeRecordingFromJpegs(tab.recordingFrames, out);
+      tab.recordingFrames = [];
       tab.recordingPath = null;
-      return { path, bytes: 0 };
+      try {
+        const info = await stat(result.path);
+        return { path: result.path, bytes: info.size };
+      } catch {
+        return result;
+      }
     },
     async listDownloads() {
       return downloads;
@@ -516,6 +550,12 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
         tab.cdp.on("Page.screencastFrame", async (frame) => {
           if (!active) {
             return;
+          }
+          if (tab.recordingActive) {
+            tab.recordingFrames.push(frame.data);
+            if (tab.recordingFrames.length > 3600) {
+              tab.recordingFrames.shift();
+            }
           }
           const payload: FramePayload = {
             tabId,

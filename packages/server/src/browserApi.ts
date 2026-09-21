@@ -32,6 +32,23 @@ export class BrowserApi {
       useFakeEngine: options.useFakeEngine,
       exec: options.exec,
     });
+    this.host.setPickHandler((tabId, sessionId, payload) => {
+      void this.emitPick(sessionId, tabId, payload);
+    });
+  }
+
+  private async emitPick(sessionId: string, tabId: string, payload: Record<string, unknown>): Promise<void> {
+    try {
+      const png = await this.host.engineForAutomation().captureScreenshot(tabId);
+      this.options.emit("browser-pick", {
+        sessionId,
+        tabId,
+        payload: { ...payload, pngBase64: png.toString("base64") },
+        at: Date.now(),
+      });
+    } catch {
+      this.options.emit("browser-pick", { sessionId, tabId, payload, at: Date.now() });
+    }
   }
 
   async close(): Promise<void> {
@@ -314,10 +331,14 @@ const s=new EventSource(u);s.addEventListener('frame',e=>{const d=JSON.parse(e.d
     if (action === "/pointer" && method === "POST") {
       const body = await readBody();
       this.host.bumpControlEpoch(tabId);
-      await this.host.engineForAutomation().click(tabId, {
-        x: Number(body["x"]),
-        y: Number(body["y"]),
-      });
+      const tab = await this.host.engineForAutomation().listTabs().then((tabs) => tabs.find((t) => t.tabId === tabId));
+      const vw = tab?.viewport.width ?? 1280;
+      const vh = tab?.viewport.height ?? 720;
+      const cw = Number(body["canvasWidth"]) || vw;
+      const ch = Number(body["canvasHeight"]) || vh;
+      const x = (Number(body["x"]) / cw) * vw;
+      const y = (Number(body["y"]) / ch) * vh;
+      await this.host.engineForAutomation().click(tabId, { x, y });
       this.json(res, 200, { ok: true });
       return true;
     }

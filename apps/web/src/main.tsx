@@ -4,6 +4,8 @@ import { HeliconApp } from "@helicon/ui";
 import { Connect } from "./Connect.js";
 import { desktopFrame, titlebarOverlay, bindDesktopZoom } from "./frame.js";
 import { bindDesktopLinks } from "./links.js";
+import { bindBrowserDesktopShortcuts } from "./browserDesktopShortcuts.js";
+import { openBrowserPip } from "./browserDesktop.js";
 import { appNotifier } from "./notifier.js";
 import { desktopUpdater } from "./updater.js";
 import { WebHeliconClient } from "./webClient.js";
@@ -11,6 +13,7 @@ import "./theme.css";
 
 bindDesktopZoom();
 bindDesktopLinks();
+bindBrowserDesktopShortcuts();
 
 const root = document.getElementById("root");
 if (!root) {
@@ -37,6 +40,7 @@ function Root() {
   return (
     <HeliconApp
       client={new WebHeliconClient()}
+      openBrowserPip={openBrowserPip}
       frame={desktopFrame()}
       titlebarOverlay={titlebarOverlay()}
       updater={desktopUpdater()}

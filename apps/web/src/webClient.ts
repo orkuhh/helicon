@@ -464,6 +464,44 @@ export class WebHeliconClient implements HeliconClient {
     return url(`/api/browser/stream?sessionId=${enc(sessionId)}&tabId=${enc(tabId)}`);
   }
 
+  browserPipUrl(sessionId: string, tabId: string): string {
+    return url(`/api/browser/pip.html?sessionId=${enc(sessionId)}&tabId=${enc(tabId)}`);
+  }
+
+  async startBrowserPick(sessionId: string, tabId: string): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/pick/start`, {});
+  }
+
+  async cancelBrowserPick(sessionId: string, tabId: string): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/pick/cancel`, {});
+  }
+
+  async captureBrowserScreenshot(sessionId: string, tabId: string): Promise<string> {
+    const body = await call<{ pngBase64: string }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/screenshot`, {});
+    return body.pngBase64;
+  }
+
+  async startBrowserRecording(sessionId: string, tabId: string): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/recording/start`, {});
+  }
+
+  async stopBrowserRecording(sessionId: string, tabId: string): Promise<{ path: string; bytes: number }> {
+    return await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/recording/stop`, {});
+  }
+
+  async sendBrowserPointer(sessionId: string, tabId: string, x: number, y: number, canvasWidth: number, canvasHeight: number): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/pointer`, {
+      x,
+      y,
+      canvasWidth,
+      canvasHeight,
+    });
+  }
+
+  async listBrowserDownloads(): Promise<{ id: string; url: string; suggestedFilename: string; path: string; at: string }[]> {
+    return (await call<{ downloads: { id: string; url: string; suggestedFilename: string; path: string; at: string }[] }>("GET", "/api/browser/downloads")).downloads;
+  }
+
   /**
    * A server path the browser loads by itself, like an attachment's bytes. It carries no token: the
    * cookie from the handshake is what lets these through, so nothing secret ends up in an `img` tag.
@@ -537,6 +575,20 @@ export class WebHeliconClient implements HeliconClient {
           at: number;
         };
         this.dispatch({ type: "browser-work", ...data });
+      } catch {
+        /* ignore */
+      }
+    });
+    source.addEventListener("browser-pick", (message) => {
+      this.touch();
+      try {
+        const data = JSON.parse((message as MessageEvent<string>).data) as {
+          sessionId: string;
+          tabId: string;
+          payload: Record<string, unknown>;
+          at: number;
+        };
+        this.dispatch({ type: "browser-pick", ...data });
       } catch {
         /* ignore */
       }

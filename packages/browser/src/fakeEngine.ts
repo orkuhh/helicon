@@ -10,7 +10,7 @@ interface FakeTab {
   controllerEpoch: number;
 }
 
-export function createFakeEngine(_options: BrowserEngineOptions): BrowserEngine {
+export function createFakeEngine(options: BrowserEngineOptions): BrowserEngine {
   const tabs = new Map<string, FakeTab>();
   const downloads: BrowserDownload[] = [];
   const frameSubs = new Map<string, Set<(f: FramePayload) => void>>();
@@ -187,8 +187,14 @@ export function createFakeEngine(_options: BrowserEngineOptions): BrowserEngine 
     async waitFor(_tabId, _input: WaitForInput) {
       return;
     },
-    async startPick() {
-      return;
+    async startPick(tabId) {
+      options.onPickComplete?.(tabId, {
+        tag: "div",
+        selector: "div",
+        text: "picked",
+        rect: { x: 0, y: 0, width: 10, height: 10 },
+        comment: "",
+      });
     },
     async cancelPick() {
       return;
@@ -197,7 +203,7 @@ export function createFakeEngine(_options: BrowserEngineOptions): BrowserEngine 
       return;
     },
     async stopRecording() {
-      return { path: "/tmp/fake.webm", bytes: 0 };
+      return { path: "/tmp/fake.webm", bytes: 12 };
     },
     async listDownloads() {
       return downloads;

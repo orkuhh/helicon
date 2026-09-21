@@ -1,7 +1,7 @@
 import type { ApprovalMode, ModelOption, ReasoningEffort, SkillEntry } from "../types.js";
 
 /** What a built-in command does; skills are the other kind of command. */
-export type SlashAction = "compact" | "model" | "effort" | "permissions" | "fork" | "new" | "resume" | "init" | "skill" | "goal";
+export type SlashAction = "compact" | "model" | "effort" | "permissions" | "fork" | "new" | "resume" | "init" | "skill" | "goal" | "browser";
 
 export interface SlashCommand {
   /** Typed after the slash. */
@@ -53,6 +53,7 @@ export const BUILTIN_COMMANDS: readonly SlashCommand[] = [
     runsBare: false,
   }),
   builtin("skill", "skill", "Run a skill by name", { hint: "<skill> [request]", runsBare: false }),
+  builtin("browser", "browser", "Open the in-app browser panel", { needsThread: true, hint: "[url]" }),
 ];
 
 /** Sent for `/init`; the terminal UI's own prompt is not published, so this asks for the same outcome. */

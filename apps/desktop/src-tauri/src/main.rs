@@ -11,6 +11,8 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 use tauri::{Manager, Url, WebviewUrl, WebviewWindowBuilder};
+
+mod browser_cmds;
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
 
@@ -509,6 +511,11 @@ fn is_external_link(url: &Url) -> bool {
 
 fn main() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            browser_cmds::browser_pip_open,
+            browser_cmds::browser_pip_close,
+            browser_cmds::snap_shot_capture,
+        ])
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())

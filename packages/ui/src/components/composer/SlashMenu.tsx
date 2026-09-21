@@ -1,4 +1,4 @@
-import { BookOpen, Brain, CornerDownLeft, Cpu, FileText, GitFork, History, Minimize2, Shield, SquarePen, Target } from "lucide-react";
+import { BookOpen, Brain, CornerDownLeft, Cpu, FileText, GitFork, Globe, History, Minimize2, Shield, SquarePen, Target } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import type { SlashAction, SlashCommand } from "../../model/slash.js";
 import { Spinner, cn } from "../ui/primitives.js";
@@ -20,6 +20,7 @@ const ACTION_ICONS: Record<SlashAction, ReactNode> = {
   init: <FileText size={14} />,
   skill: <BookOpen size={14} />,
   goal: <Target size={14} />,
+  browser: <Globe size={14} />,
 };
 
 /** Where a skill comes from, for the ones not built into Muse. */

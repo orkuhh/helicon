@@ -21,6 +21,7 @@ export interface BrowserSessionState {
   workLog: BrowserWorkEntry[];
   agentCursor: { x: number; y: number; visible: boolean } | null;
   pickActive: boolean;
+  recording: boolean;
 }
 
 export function emptyBrowserSession(): BrowserSessionState {
@@ -37,5 +38,6 @@ export function emptyBrowserSession(): BrowserSessionState {
     workLog: [],
     agentCursor: null,
     pickActive: false,
+    recording: false,
   };
 }

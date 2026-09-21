@@ -348,6 +348,22 @@ class FakeClient implements HeliconClient {
   browserStreamUrl() {
     return "/api/browser/stream";
   }
+  browserPipUrl() {
+    return "/api/browser/pip.html";
+  }
+  async startBrowserPick() {}
+  async cancelBrowserPick() {}
+  async captureBrowserScreenshot() {
+    return "";
+  }
+  async startBrowserRecording() {}
+  async stopBrowserRecording() {
+    return { path: "/tmp/x.webm", bytes: 0 };
+  }
+  async sendBrowserPointer() {}
+  async listBrowserDownloads() {
+    return [];
+  }
   subscribe(handler: EventHandler) {
     this.handler = handler;
     return () => {

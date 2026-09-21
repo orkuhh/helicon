@@ -1,9 +1,10 @@
-import { Globe, Plus, RefreshCw, X } from "lucide-react";
+import { Camera, Circle, Globe, MousePointer2, PictureInPicture2, Plus, RefreshCw, Video, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { shallowEqual, useApp, useController } from "../../app/context.js";
 import { useOverlayDragProps } from "../../app/frame.js";
 import { DEFAULT_BROWSER_WIDTH, BROWSER_WIDTH_MIN, BROWSER_WIDTH_MAX } from "../../model/store.js";
 import { Button, IconButton, Spinner, cn } from "../ui/primitives.js";
+import { AgentBrowserCursor } from "./AgentBrowserCursor.js";
 import { PreviewUnreachable } from "./PreviewUnreachable.js";
 
 export function BrowserPanel(props: { sessionId: string }) {
@@ -70,12 +71,46 @@ export function BrowserPanel(props: { sessionId: string }) {
           <Plus size={14} />
         </IconButton>
       </div>
-      <div className="flex items-center gap-1 border-b border-line px-2 py-1.5">
+      <div className="flex flex-wrap items-center gap-1 border-b border-line px-2 py-1.5">
         <IconButton
           label="Reload"
           onClick={() => active && void controller.reloadBrowserTab(props.sessionId, active.tabId)}
         >
           <RefreshCw size={14} />
+        </IconButton>
+        <IconButton
+          label="Pick element"
+          active={browser?.pickActive}
+          onClick={() => active && void controller.toggleBrowserPick(props.sessionId, active.tabId, !browser?.pickActive)}
+        >
+          <MousePointer2 size={14} />
+        </IconButton>
+        <IconButton
+          label="Screenshot"
+          onClick={() => active && void controller.captureBrowserScreenshot(props.sessionId, active.tabId)}
+        >
+          <Camera size={14} />
+        </IconButton>
+        <IconButton
+          label={browser?.recording ? "Stop recording" : "Record"}
+          active={browser?.recording}
+          onClick={() =>
+            active && void controller.toggleBrowserRecording(props.sessionId, active.tabId, !browser?.recording)
+          }
+        >
+          {browser?.recording ? <Circle size={14} className="fill-red-500 text-red-500" /> : <Video size={14} />}
+        </IconButton>
+        <IconButton
+          label="Picture-in-picture"
+          onClick={() => active && void controller.openBrowserPip(props.sessionId, active.tabId)}
+        >
+          <PictureInPicture2 size={14} />
+        </IconButton>
+        <IconButton
+          label="Mini player"
+          onClick={() => controller.setBrowserMiniPlayer(props.sessionId, !browser?.miniPlayerOpen)}
+        >
+          <PictureInPicture2 size={14} className="rotate-180" />
         </IconButton>
         <input
           className="min-w-0 flex-1 rounded border border-line bg-canvas px-2 py-1 text-xs font-mono text-fg"
@@ -98,11 +133,13 @@ export function BrowserPanel(props: { sessionId: string }) {
       </div>
       <div className="relative min-h-0 flex-1 bg-canvas">
         {browser?.loading ? (
-          <div className="absolute inset-0 grid place-items-center">
+          <div className="absolute inset-0 z-10 grid place-items-center">
             <Spinner />
           </div>
         ) : null}
-        {active?.failed ? <PreviewUnreachable code={active.failed} onRetry={() => void controller.reloadBrowserTab(props.sessionId, active.tabId)} /> : null}
+        {active?.failed ? (
+          <PreviewUnreachable code={active.failed} onRetry={() => void controller.reloadBrowserTab(props.sessionId, active.tabId)} />
+        ) : null}
         {!active?.failed && !browser?.tabs.length ? (
           <EmptyBrowser
             history={browser?.history ?? []}
@@ -110,11 +147,28 @@ export function BrowserPanel(props: { sessionId: string }) {
             onOpen={(url) => void controller.openBrowserTab(props.sessionId, url)}
           />
         ) : (
-          <canvas
-            ref={canvasRef}
-            className="h-full w-full cursor-crosshair"
-            onPointerDown={() => active && controller.browserHumanInput(props.sessionId, active.tabId)}
-          />
+          <>
+            <canvas
+              ref={canvasRef}
+              className="h-full w-full cursor-crosshair"
+              onPointerDown={(e) => {
+                if (!active || !canvasRef.current) {
+                  return;
+                }
+                controller.browserHumanInput(props.sessionId, active.tabId);
+                void controller.browserCanvasPointer(props.sessionId, active.tabId, e.clientX, e.clientY, canvasRef.current);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                if (active) {
+                  void controller.reloadBrowserTab(props.sessionId, active.tabId);
+                }
+              }}
+            />
+            {browser?.agentCursor?.visible ? (
+              <AgentBrowserCursor x={browser.agentCursor.x} y={browser.agentCursor.y} visible />
+            ) : null}
+          </>
         )}
       </div>
       <ResizeHandle onResize={(w) => controller.setBrowserWidth(w)} />
@@ -174,7 +228,8 @@ function ResizeHandle(props: { onResize: (width: number) => void }) {
         e.preventDefault();
         const startX = e.clientX;
         const startW = (e.currentTarget.parentElement as HTMLElement).offsetWidth;
-        const move = (ev: PointerEvent) => props.onResize(Math.min(BROWSER_WIDTH_MAX, Math.max(BROWSER_WIDTH_MIN, startW - (ev.clientX - startX))));
+        const move = (ev: PointerEvent) =>
+          props.onResize(Math.min(BROWSER_WIDTH_MAX, Math.max(BROWSER_WIDTH_MIN, startW - (ev.clientX - startX))));
         const up = () => {
           window.removeEventListener("pointermove", move);
           window.removeEventListener("pointerup", up);

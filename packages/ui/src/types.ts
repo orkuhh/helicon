@@ -505,4 +505,11 @@ export type HeliconEvent =
   | { type: "host"; key: string; state: string; message: string }
   | { type: "connection"; state: "open" | "lost" }
   | { type: "browser"; sessionId: string; method: string; params: Record<string, unknown>; at: number }
-  | { type: "browser-work"; sessionId: string; verb: string; detail: Record<string, unknown>; at: number };
+  | { type: "browser-work"; sessionId: string; verb: string; detail: Record<string, unknown>; at: number }
+  | {
+      type: "browser-pick";
+      sessionId: string;
+      tabId: string;
+      payload: Record<string, unknown>;
+      at: number;
+    };

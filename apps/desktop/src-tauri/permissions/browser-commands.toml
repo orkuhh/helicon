@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "browser-commands"
+description = "In-app browser PiP window and OS screenshot capture."
+commands.allow = ["browser_pip_open", "browser_pip_close", "snap_shot_capture"]

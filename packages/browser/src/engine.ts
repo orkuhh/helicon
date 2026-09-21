@@ -98,4 +98,5 @@ export interface BrowserEngineOptions {
   artifactsDir: string;
   debugPort?: number;
   wslHosts?: string[];
+  onPickComplete?: (tabId: string, payload: Record<string, unknown>) => void;
 }

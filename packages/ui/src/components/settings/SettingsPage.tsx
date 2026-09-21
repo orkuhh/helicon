@@ -133,6 +133,18 @@ export function SettingsPage() {
       </header>
 
       <div className="mx-auto w-full min-w-0 max-w-[720px] px-4 pb-16 @min-[520px]:px-6">
+        <Section title="Browser">
+          <Row
+            label="In-app browser"
+            description="Collaborative Chromium preview beside threads. Use the globe toggle or ⌘⇧B to show it."
+          >
+            <p className="text-xs text-subtle">Defaults and cookie import are managed on the daemon; profiles persist under ~/.helicon/browser.</p>
+          </Row>
+          <Row label="OS snapshot" description="Capture the screen into the composer with ⌘⇧S (desktop).">
+            <p className="text-xs text-subtle">Requires the Helicon desktop app.</p>
+          </Row>
+        </Section>
+
         <Section title="Appearance">
           <Row label="Theme" description="Light, dark, or whatever this device is set to.">
             <Pick value={prefs.theme} options={THEMES} onChange={(value) => controller.setTheme(value)} />

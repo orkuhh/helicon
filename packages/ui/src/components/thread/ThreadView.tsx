@@ -16,6 +16,7 @@ import { revealLabel } from "../sidebar/Sidebar.js";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger, Tip } from "../ui/overlays.js";
 import { Button, IconButton, MOD, Spinner } from "../ui/primitives.js";
 import { RightSidePanel } from "../browser/RightSidePanel.js";
+import { ThreadPreviewMiniPlayer } from "../browser/ThreadPreviewMiniPlayer.js";
 import { Transcript } from "./Transcript.js";
 
 export function ThreadView(props: { sessionId: string }) {
@@ -24,6 +25,8 @@ export function ThreadView(props: { sessionId: string }) {
   const filesOpen = useApp((s) => s.prefs.filesOpen);
   const browserOpen = useApp((s) => s.prefs.browserOpen);
   const rightOpen = filesOpen || browserOpen;
+  const miniPlayer = useApp((s) => s.browser[props.sessionId]?.miniPlayerOpen ?? false);
+  const frameDataUrl = useApp((s) => s.browser[props.sessionId]?.frameDataUrl ?? null);
   if (!session) {
     return <MissingThread />;
   }
@@ -38,6 +41,7 @@ export function ThreadView(props: { sessionId: string }) {
         </div>
         {rightOpen ? <RightSidePanel sessionId={props.sessionId} cwd={session.cwd} /> : null}
       </div>
+      {miniPlayer ? <ThreadPreviewMiniPlayer sessionId={props.sessionId} frameDataUrl={frameDataUrl} /> : null}
     </div>
   );
 }

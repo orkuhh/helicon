@@ -42,6 +42,7 @@ export class BrowserHost {
   private readonly tabSession = new Map<string, string>();
   private readonly automationEpoch = new Map<string, number>();
   private wslHostsLoaded = false;
+  private onPickComplete?: (tabId: string, sessionId: string, payload: Record<string, unknown>) => void;
 
   constructor(
     private readonly store: HeliconStore,
@@ -77,6 +78,12 @@ export class BrowserHost {
         profilesDir: this.profilesDir,
         artifactsDir: this.artifactsDir,
         wslHosts: this.wslHosts,
+        onPickComplete: (tabId, payload) => {
+          const sessionId = this.tabSession.get(tabId);
+          if (sessionId && this.onPickComplete) {
+            this.onPickComplete(tabId, sessionId, payload);
+          }
+        },
       });
     } else {
       this.engine = await loadPlaywrightEngine({
@@ -84,6 +91,12 @@ export class BrowserHost {
         profilesDir: this.profilesDir,
         artifactsDir: this.artifactsDir,
         wslHosts: this.wslHosts,
+        onPickComplete: (tabId, payload) => {
+          const sessionId = this.tabSession.get(tabId);
+          if (sessionId && this.onPickComplete) {
+            this.onPickComplete(tabId, sessionId, payload);
+          }
+        },
       });
     }
     const engine = this.engine;
@@ -92,6 +105,14 @@ export class BrowserHost {
     }
     await engine.ensureInstalled();
     return engine;
+  }
+
+  setPickHandler(handler: (tabId: string, sessionId: string, payload: Record<string, unknown>) => void): void {
+    this.onPickComplete = handler;
+  }
+
+  sessionIdForTab(tabId: string): string | null {
+    return this.tabSession.get(tabId) ?? null;
   }
 
   getDefaults(): BrowserDefaults {
