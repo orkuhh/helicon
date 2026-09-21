@@ -93,6 +93,8 @@ export interface FramePayload {
   at: number;
 }
 
+export type BrowserPermission = "clipboard-read" | "clipboard-sanitized-write" | "notifications" | "geolocation";
+
 export interface BrowserDefaults {
   profileId: string;
   viewport: ViewportState;
@@ -102,6 +104,7 @@ export interface BrowserDefaults {
   recordingShowMousePresses: boolean;
   downloadDir: string | null;
   configuredLocalUrls: string[];
+  grantedPermissions: BrowserPermission[];
 }
 
 export const DEFAULT_VIEWPORT: ViewportState = {
@@ -121,6 +124,7 @@ export const DEFAULT_BROWSER_DEFAULTS: BrowserDefaults = {
   recordingShowMousePresses: true,
   downloadDir: null,
   configuredLocalUrls: [],
+  grantedPermissions: [],
 };
 
 export const ZOOM_LADDER = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5] as const;

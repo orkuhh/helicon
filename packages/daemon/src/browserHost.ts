@@ -86,11 +86,14 @@ export class BrowserHost {
         },
       });
     } else {
+      const defaults = this.getDefaults();
       this.engine = await loadPlaywrightEngine({
         dataDir: this.dataDir,
         profilesDir: this.profilesDir,
         artifactsDir: this.artifactsDir,
         wslHosts: this.wslHosts,
+        recordingShowKeyPresses: defaults.recordingShowKeyPresses,
+        recordingShowMousePresses: defaults.recordingShowMousePresses,
         onPickComplete: (tabId, payload) => {
           const sessionId = this.tabSession.get(tabId);
           if (sessionId && this.onPickComplete) {

@@ -29,7 +29,8 @@ import { DEFAULT_VIEWPORT, MIN_VIEWPORT_DIM, MAX_VIEWPORT_AREA } from "./types.j
 import { isAllowedNavigationUrl, normalizePreviewUrl } from "./url.js";
 import { resolveEnvironmentPortUrl } from "./environmentPort.js";
 import { buildAutomationSnapshot, INTERACTIVE_EXTRACT_SCRIPT } from "./snapshot.js";
-import { finalizeRecordingFromJpegs } from "./recordingCompositor.js";
+import { finalizeRecordingFromFrames } from "./recordingCompositor.js";
+import type { RecordingFrameMeta } from "./recordingTypes.js";
 import { HELICON_PICK_INIT_SCRIPT } from "./pickOverlay.js";
 import { stat } from "node:fs/promises";
 
@@ -43,8 +44,10 @@ interface TabRuntime {
   controllerEpoch: number;
   crashAttempts: number[];
   recordingPath: string | null;
-  recordingFrames: string[];
+  recordingFrames: RecordingFrameMeta[];
   recordingActive: boolean;
+  recordingCursor: { x: number; y: number } | null;
+  recordingKeyLabel: string | undefined;
   pickBound: boolean;
 }
 
@@ -200,6 +203,31 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
     return tab.snapshot;
   };
 
+  const resolveDevToolsUrl = async (tabId: string): Promise<string | null> => {
+    const tab = tabs.get(tabId);
+    if (!tab) {
+      return null;
+    }
+    const pageUrl = tab.page.url();
+    try {
+      const res = await fetch(`http://127.0.0.1:${debugPort}/json/list`);
+      if (!res.ok) {
+        return null;
+      }
+      const list = (await res.json()) as { type?: string; url?: string; webSocketDebuggerUrl?: string }[];
+      const target =
+        list.find((t) => t.type === "page" && t.url === pageUrl) ??
+        list.find((t) => t.type === "page" && t.webSocketDebuggerUrl);
+      if (!target?.webSocketDebuggerUrl) {
+        return null;
+      }
+      const ws = target.webSocketDebuggerUrl.replace(/^ws:\/\//, "");
+      return `https://chrome-devtools-frontend.appspot.com/serve_rev/@latest/inspector.html?ws=${encodeURIComponent(ws)}`;
+    } catch {
+      return null;
+    }
+  };
+
   const engine: BrowserEngine = {
     ready: false,
     async ensureInstalled() {
@@ -238,6 +266,8 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
         recordingPath: null,
         recordingFrames: [],
         recordingActive: false,
+        recordingCursor: null,
+        recordingKeyLabel: undefined,
         pickBound: false,
       };
       tabs.set(tabId, runtime);
@@ -256,6 +286,8 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
           recordingPath: null,
           recordingFrames: [],
           recordingActive: false,
+          recordingCursor: null,
+          recordingKeyLabel: undefined,
           pickBound: false,
         });
       });
@@ -377,6 +409,7 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       }
       tab.snapshot = { ...tab.snapshot, controller: "agent" };
       if (input.x !== undefined && input.y !== undefined) {
+        tab.recordingCursor = { x: input.x, y: input.y };
         await tab.page.mouse.click(input.x, input.y);
         return;
       }
@@ -424,7 +457,9 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       if (input.shift) {
         mods.push("Shift");
       }
-      await tab.page.keyboard.press([...mods, input.key].join("+"));
+      const combo = [...mods, input.key].join("+");
+      tab.recordingKeyLabel = combo;
+      await tab.page.keyboard.press(combo);
     },
     async scroll(tabId, input: ScrollInput) {
       const tab = tabs.get(tabId);
@@ -510,9 +545,14 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       }
       tab.recordingActive = false;
       const out = tab.recordingPath ?? join(options.artifactsDir, `rec-${tabId}-${Date.now()}.webm`);
-      const result = await finalizeRecordingFromJpegs(tab.recordingFrames, out);
+      const result = await finalizeRecordingFromFrames(tab.recordingFrames, out, {
+        showMouse: options.recordingShowMousePresses ?? true,
+        showKeys: options.recordingShowKeyPresses ?? true,
+      });
       tab.recordingFrames = [];
       tab.recordingPath = null;
+      tab.recordingCursor = null;
+      tab.recordingKeyLabel = undefined;
       try {
         const info = await stat(result.path);
         return { path: result.path, bytes: info.size };
@@ -523,12 +563,22 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
     async listDownloads() {
       return downloads;
     },
+    async getDevToolsFrontendUrl(tabId) {
+      return await resolveDevToolsUrl(tabId);
+    },
     async openDevTools(tabId) {
-      const tab = tabs.get(tabId);
-      if (!tab) {
-        throw new Error("Tab not found");
+      const url = await resolveDevToolsUrl(tabId);
+      if (!url) {
+        throw new Error("DevTools URL unavailable");
       }
-      await tab.page.pause();
+      const { spawn } = await import("node:child_process");
+      const open =
+        process.platform === "darwin"
+          ? ["open", url]
+          : process.platform === "win32"
+            ? ["cmd", "/c", "start", "", url]
+            : ["xdg-open", url];
+      spawn(open[0], open.slice(1), { detached: true, stdio: "ignore" }).unref();
     },
     subscribeFrames(tabId, onFrame) {
       let set = frameSubs.get(tabId);
@@ -552,7 +602,12 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
             return;
           }
           if (tab.recordingActive) {
-            tab.recordingFrames.push(frame.data);
+            tab.recordingFrames.push({
+              jpegBase64: frame.data,
+              cursor: tab.recordingCursor ?? undefined,
+              keyLabel: tab.recordingKeyLabel,
+            });
+            tab.recordingKeyLabel = undefined;
             if (tab.recordingFrames.length > 3600) {
               tab.recordingFrames.shift();
             }

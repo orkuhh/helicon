@@ -364,6 +364,38 @@ class FakeClient implements HeliconClient {
   async listBrowserDownloads() {
     return [];
   }
+  async resizeBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async setBrowserAppearance() {
+    return await this.openBrowserTab();
+  }
+  async openBrowserDevTools() {}
+  async getBrowserDefaults() {
+    return {
+      profileId: "default",
+      autoShowFloatingPreview: true,
+      recordingShowKeyPresses: true,
+      recordingShowMousePresses: true,
+      grantedPermissions: [],
+      colorScheme: "system" as const,
+    };
+  }
+  async patchBrowserDefaults(patch: Partial<import("../src/client.js").BrowserDefaultsView>) {
+    return { ...(await this.getBrowserDefaults()), ...patch };
+  }
+  async listBrowserProfiles() {
+    return [{ id: "default", name: "Default", persistent: true, builtIn: true }];
+  }
+  async createBrowserProfile() {}
+  async clearBrowserProfileData() {}
+  async listBrowserImportSources() {
+    return [];
+  }
+  async importBrowserCookies() {
+    return { imported: 0, skipped: 0 };
+  }
+  async submitBrowserPickAnnotation() {}
   subscribe(handler: EventHandler) {
     this.handler = handler;
     return () => {

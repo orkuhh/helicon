@@ -85,6 +85,7 @@ export interface BrowserEngine {
   stopRecording(tabId: string): Promise<{ path: string; bytes: number }>;
   listDownloads(): Promise<BrowserDownload[]>;
   openDevTools(tabId: string): Promise<void>;
+  getDevToolsFrontendUrl(tabId: string): Promise<string | null>;
   subscribeFrames(tabId: string, onFrame: (frame: FramePayload) => void): () => void;
   humanInput(tabId: string): void;
   close(): Promise<void>;
@@ -99,4 +100,6 @@ export interface BrowserEngineOptions {
   debugPort?: number;
   wslHosts?: string[];
   onPickComplete?: (tabId: string, payload: Record<string, unknown>) => void;
+  recordingShowMousePresses?: boolean;
+  recordingShowKeyPresses?: boolean;
 }

@@ -801,6 +801,7 @@ export class HeliconStore {
         ...DEFAULT_BROWSER_DEFAULTS,
         ...parsed,
         viewport: { ...DEFAULT_BROWSER_DEFAULTS.viewport, ...(parsed.viewport ?? {}) },
+        grantedPermissions: parsed.grantedPermissions ?? DEFAULT_BROWSER_DEFAULTS.grantedPermissions,
       };
     } catch {
       return { ...DEFAULT_BROWSER_DEFAULTS };

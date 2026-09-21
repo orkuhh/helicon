@@ -46,6 +46,7 @@ import { buildThreadTitlePrompt, deriveTitle, parseExecTitle, sanitizeThreadTitl
 import { AoniaError, createAonia, type Aonia } from "@harjjotsinghh/aonia";
 import { HttpError } from "./httpError.js";
 import { BrowserApi } from "./browserApi.js";
+import { previewToolAllowed } from "./browserApproval.js";
 import { PreviewMcpToolkit, PREVIEW_TOOL_NAMES } from "./mcpPreview.js";
 
 export const HELICON_VERSION = "0.15.0";
@@ -148,6 +149,7 @@ interface LiveState {
   goal: GoalBlock | null;
   /** Bumped on every live goal change, so a slow transcript load never writes an older goal over a newer one. */
   goalSeq: number;
+  approvalMode: ApprovalMode;
 }
 
 export interface LiveView {
@@ -768,41 +770,20 @@ export class HeliconServer {
     }
   }
 
-  /** D9: loopback preview ops auto-allow; destructive tools follow session approval mode. */
+  /** D9: loopback preview ops auto-allow; destructive/open-world tools follow session approval mode. */
   private async browserApproval(sessionId: string, tool: string, detail: Record<string, unknown>): Promise<boolean> {
-    const readonly = new Set([
-      "preview_status",
-      "preview_snapshot",
-      "preview_wait_for",
-      "preview_resize",
-      "preview_set_appearance",
-    ]);
-    if (readonly.has(tool)) {
-      return true;
-    }
-    const url = typeof detail["url"] === "string" ? detail["url"] : "";
-    const loopback =
-      url.includes("localhost") ||
-      url.includes("127.0.0.1") ||
-      url === "" ||
-      tool === "preview_click" ||
-      tool === "preview_type";
-    if (loopback && (tool === "preview_navigate" || tool === "preview_open")) {
-      return true;
-    }
     const yolo = this.store.getYoloSettings().enabled;
-    if (yolo) {
-      return true;
+    const live = this.liveFor(sessionId);
+    let tabUrl: string | undefined;
+    try {
+      const tabId = typeof detail["tabId"] === "string" ? detail["tabId"] : undefined;
+      const tabs = await this.browserApi.getHost().listTabs(sessionId);
+      const tab = (tabId ? tabs.find((t) => t.tabId === tabId) : tabs[0]) ?? null;
+      tabUrl = tab?.url;
+    } catch {
+      tabUrl = undefined;
     }
-    const found = this.store.findSession(sessionId);
-    if (!found) {
-      return false;
-    }
-    const live = this.live.get(sessionId);
-    if (live && live.pendingApprovals.size > 0) {
-      return false;
-    }
-    return tool !== "preview_evaluate";
+    return previewToolAllowed(live.approvalMode, tool, detail, { yolo, tabUrl });
   }
 
   /** Coalesce bursts (discovery, title backfill) into one sidebar refresh. */
@@ -1019,6 +1000,13 @@ export class HeliconServer {
       const args = (call ? asRecord(call["arguments"]) : asRecord(body["arguments"])) ?? {};
       if (!name) {
         throw new HttpError(400, "tool name is required.");
+      }
+      const sid = sessionId ?? this.mcpSessionId;
+      if (sid && PREVIEW_TOOL_NAMES.includes(name as (typeof PREVIEW_TOOL_NAMES)[number])) {
+        const ok = await this.browserApproval(sid, name, args);
+        if (!ok) {
+          throw new HttpError(403, "Browser tool denied by approval policy.");
+        }
       }
       const result = await this.mcpToolkit.invoke({ name, arguments: args });
       this.json(res, 200, { tools: PREVIEW_TOOL_NAMES, result });
@@ -1837,6 +1825,7 @@ export class HeliconServer {
         lastError: null,
         goal: null,
         goalSeq: 0,
+        approvalMode: "onRequest",
       };
       this.live.set(sessionId, state);
     }
@@ -2543,6 +2532,10 @@ export class HeliconServer {
       if (active !== live.activeTurnId) {
         live.activeTurnId = active;
         live.turnStartedAt = active ? (live.turnStartedAt ?? nowIso()) : null;
+      }
+      const modeRaw = asRecord(msp["approvalMode"])?.["mode"];
+      if (isApprovalMode(modeRaw)) {
+        live.approvalMode = modeRaw;
       }
     }
     live.pendingApprovals = new Set(approvals.map((a) => str(a["approvalId"])).filter((id): id is string => id !== null));

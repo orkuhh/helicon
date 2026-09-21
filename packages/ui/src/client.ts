@@ -177,8 +177,36 @@ export interface HeliconClient {
   stopBrowserRecording(sessionId: string, tabId: string): Promise<{ path: string; bytes: number }>;
   sendBrowserPointer(sessionId: string, tabId: string, x: number, y: number, canvasWidth: number, canvasHeight: number): Promise<void>;
   listBrowserDownloads(): Promise<{ id: string; url: string; suggestedFilename: string; path: string; at: string }[]>;
+  resizeBrowserTab(
+    sessionId: string,
+    tabId: string,
+    viewport: import("./types.js").BrowserTabSnapshot["viewport"],
+  ): Promise<import("./types.js").BrowserTabSnapshot>;
+  setBrowserAppearance(
+    sessionId: string,
+    tabId: string,
+    appearance: import("./types.js").BrowserTabSnapshot["colorScheme"],
+  ): Promise<import("./types.js").BrowserTabSnapshot>;
+  openBrowserDevTools(sessionId: string, tabId: string): Promise<void>;
+  getBrowserDefaults(): Promise<BrowserDefaultsView>;
+  patchBrowserDefaults(patch: Partial<BrowserDefaultsView>): Promise<BrowserDefaultsView>;
+  listBrowserProfiles(): Promise<{ id: string; name: string; persistent: boolean; builtIn: boolean }[]>;
+  createBrowserProfile(id: string, name: string): Promise<void>;
+  clearBrowserProfileData(profileId: string, what: "cookies" | "cache"): Promise<void>;
+  listBrowserImportSources(): Promise<{ id: string; name: string; available: boolean; reason?: string }[]>;
+  importBrowserCookies(filePath: string): Promise<{ imported: number; skipped: number }>;
+  submitBrowserPickAnnotation(sessionId: string, tabId: string, payload: Record<string, unknown>): Promise<void>;
   /** Subscribe to server events; returns an unsubscribe function. */
   subscribe(handler: EventHandler): () => void;
+}
+
+export interface BrowserDefaultsView {
+  profileId: string;
+  autoShowFloatingPreview: boolean;
+  recordingShowKeyPresses: boolean;
+  recordingShowMousePresses: boolean;
+  grantedPermissions: string[];
+  colorScheme: "system" | "light" | "dark";
 }
 
 /** Parse the title-settings endpoint; malformed answers fall back to on with no model. */

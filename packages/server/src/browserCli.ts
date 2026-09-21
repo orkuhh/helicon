@@ -1,14 +1,8 @@
 #!/usr/bin/env node
 import { PREVIEW_TOOL_NAMES } from "./mcpPreview.js";
+import { parseBrowserCliArgv } from "./browserCliParse.js";
 
 const TOOLS = new Set<string>(PREVIEW_TOOL_NAMES);
-
-interface CliConfig {
-  host: string;
-  port: number;
-  token: string | null;
-  sessionId: string | null;
-}
 
 function usage(): string {
   return [
@@ -35,84 +29,12 @@ function usage(): string {
   ].join("\n");
 }
 
-function parseArgv(argv: string[]): { config: CliConfig; tool: string | null; args: Record<string, unknown> } {
-  const config: CliConfig = { host: "127.0.0.1", port: 3127, token: null, sessionId: null };
-  let tabId: string | null = null;
-  let jsonArgs: Record<string, unknown> | null = null;
-  const positional: string[] = [];
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a === "--help" || a === "-h") {
-      process.stdout.write(usage() + "\n");
-      process.exit(0);
-    }
-    if (a === "--host" && argv[i + 1]) {
-      config.host = argv[++i] as string;
-      continue;
-    }
-    if (a === "--port" && argv[i + 1]) {
-      config.port = Number.parseInt(argv[++i] as string, 10);
-      continue;
-    }
-    if (a === "--token" && argv[i + 1]) {
-      config.token = argv[++i] as string;
-      continue;
-    }
-    if (a === "--session" && argv[i + 1]) {
-      config.sessionId = argv[++i] as string;
-      continue;
-    }
-    if (a === "--tab" && argv[i + 1]) {
-      tabId = argv[++i] as string;
-      continue;
-    }
-    if (a === "--json" && argv[i + 1]) {
-      jsonArgs = JSON.parse(argv[++i] as string) as Record<string, unknown>;
-      continue;
-    }
-    if (a.startsWith("--")) {
-      throw new Error(`Unknown flag: ${a}`);
-    }
-    positional.push(a);
-  }
-  const tool = positional[0] ?? null;
-  const args: Record<string, unknown> = jsonArgs ? { ...jsonArgs } : {};
-  if (tabId) {
-    args["tabId"] = tabId;
-  }
-  for (let j = 1; j < positional.length; j += 2) {
-    const key = positional[j];
-    const val = positional[j + 1];
-    if (!key || val === undefined) {
-      break;
-    }
-    if (key.startsWith("--")) {
-      args[key.slice(2)] = coerce(val);
-    } else {
-      args[key] = coerce(val);
-    }
-  }
-  return { config, tool, args };
-}
-
-function coerce(raw: string): unknown {
-  if (raw === "true") {
-    return true;
-  }
-  if (raw === "false") {
-    return false;
-  }
-  if (/^-?\d+$/.test(raw)) {
-    return Number.parseInt(raw, 10);
-  }
-  if (/^-?\d+\.\d+$/.test(raw)) {
-    return Number.parseFloat(raw);
-  }
-  return raw;
-}
-
 async function main(): Promise<void> {
-  const { config, tool, args } = parseArgv(process.argv.slice(2));
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    process.stdout.write(usage() + "\n");
+    process.exit(0);
+  }
+  const { config, tool, args } = parseBrowserCliArgv(process.argv.slice(2));
   if (!tool) {
     process.stderr.write("tool name is required.\n");
     process.stderr.write(usage() + "\n");

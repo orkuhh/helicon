@@ -8,6 +8,11 @@ export interface BrowserWorkEntry {
   at: number;
 }
 
+export interface PendingBrowserPick {
+  tabId: string;
+  payload: Record<string, unknown>;
+}
+
 export interface BrowserSessionState {
   tabs: BrowserTabSnapshot[];
   activeTabId: string | null;
@@ -22,6 +27,9 @@ export interface BrowserSessionState {
   agentCursor: { x: number; y: number; visible: boolean } | null;
   pickActive: boolean;
   recording: boolean;
+  pendingPick: PendingBrowserPick | null;
+  downloadsOpen: boolean;
+  defaults: import("../client.js").BrowserDefaultsView | null;
 }
 
 export function emptyBrowserSession(): BrowserSessionState {
@@ -39,5 +47,8 @@ export function emptyBrowserSession(): BrowserSessionState {
     agentCursor: null,
     pickActive: false,
     recording: false,
+    pendingPick: null,
+    downloadsOpen: false,
+    defaults: null,
   };
 }

@@ -502,6 +502,72 @@ export class WebHeliconClient implements HeliconClient {
     return (await call<{ downloads: { id: string; url: string; suggestedFilename: string; path: string; at: string }[] }>("GET", "/api/browser/downloads")).downloads;
   }
 
+  async resizeBrowserTab(
+    sessionId: string,
+    tabId: string,
+    viewport: import("@helicon/ui").BrowserTabSnapshot["viewport"],
+  ): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (
+      await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>(
+        "POST",
+        `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/resize`,
+        { viewport },
+      )
+    ).tab;
+  }
+
+  async setBrowserAppearance(
+    sessionId: string,
+    tabId: string,
+    appearance: import("@helicon/ui").BrowserTabSnapshot["colorScheme"],
+  ): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (
+      await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>(
+        "POST",
+        `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/appearance`,
+        { appearance },
+      )
+    ).tab;
+  }
+
+  async openBrowserDevTools(sessionId: string, tabId: string): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/devtools`, {});
+  }
+
+  async getBrowserDefaults(): Promise<import("@helicon/ui").BrowserDefaultsView> {
+    const body = await call<{ defaults: import("@helicon/ui").BrowserDefaultsView }>("GET", "/api/browser/defaults");
+    return body.defaults;
+  }
+
+  async patchBrowserDefaults(patch: Partial<import("@helicon/ui").BrowserDefaultsView>): Promise<import("@helicon/ui").BrowserDefaultsView> {
+    const body = await call<{ defaults: import("@helicon/ui").BrowserDefaultsView }>("PATCH", "/api/browser/defaults", patch);
+    return body.defaults;
+  }
+
+  async listBrowserProfiles(): Promise<{ id: string; name: string; persistent: boolean; builtIn: boolean }[]> {
+    return (await call<{ profiles: { id: string; name: string; persistent: boolean; builtIn: boolean }[] }>("GET", "/api/browser/profiles")).profiles;
+  }
+
+  async createBrowserProfile(id: string, name: string): Promise<void> {
+    await call("POST", "/api/browser/profiles", { id, name });
+  }
+
+  async clearBrowserProfileData(profileId: string, what: "cookies" | "cache"): Promise<void> {
+    await call("POST", "/api/browser/clear", { profileId, what });
+  }
+
+  async listBrowserImportSources(): Promise<{ id: string; name: string; available: boolean; reason?: string }[]> {
+    return (await call<{ sources: { id: string; name: string; available: boolean; reason?: string }[] }>("GET", "/api/browser/import/sources")).sources;
+  }
+
+  async importBrowserCookies(filePath: string): Promise<{ imported: number; skipped: number }> {
+    return await call("POST", "/api/browser/import", { filePath });
+  }
+
+  async submitBrowserPickAnnotation(sessionId: string, tabId: string, payload: Record<string, unknown>): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/pick/complete`, payload);
+  }
+
   /**
    * A server path the browser loads by itself, like an attachment's bytes. It carries no token: the
    * cookie from the handshake is what lets these through, so nothing secret ends up in an `img` tag.

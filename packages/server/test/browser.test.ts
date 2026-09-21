@@ -91,4 +91,34 @@ describe("browser API", () => {
     assert.equal(pick.status, 200);
     await server.close();
   });
+
+  it("denies destructive MCP tools under default approval (D9)", async () => {
+    const connection = new FakeConnection();
+    connection.replies.set("session/start", { session: { sessionId: "s1", modelId: "muse-spark-1.3" } });
+    const server = new HeliconServer({
+      port: 0,
+      dataDir: ":memory:",
+      platform: "linux",
+      musePath: "muse",
+      browserUseFakeEngine: true,
+      hostFactory: fakeFactory(connection),
+      exec: async () => ({ stdout: "", exitCode: 127 }),
+    });
+    const { port } = await server.listen();
+    const base = `http://127.0.0.1:${port}`;
+    const created = await fetch(`${base}/api/sessions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cwd: "/work/proj" }),
+    });
+    const sessionId = ((await created.json()) as { session: { sessionId: string } }).session.sessionId;
+    await fetch(`${base}/api/sessions/${sessionId}/browser/tabs`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    const denied = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, name: "preview_evaluate", arguments: { expression: "1+1" } }),
+    });
+    assert.equal(denied.status, 403);
+    await server.close();
+  });
 });

@@ -800,23 +800,33 @@ export class HeliconController {
             activeTabId: b.activeTabId ?? tab.tabId,
             loading: false,
             unreachable: tab.failed,
+            miniPlayerOpen: b.defaults?.autoShowFloatingPreview ? true : b.miniPlayerOpen,
           }));
         }
         break;
       }
       case "browser-work":
-        this.patchBrowser(event.sessionId, (b) => ({
-          ...b,
-          workLog: [...b.workLog, { verb: event.verb, detail: event.detail, at: event.at }].slice(-200),
-          controller: event.verb.startsWith("preview_") ? "agent" : b.controller,
-          agentCursor: event.verb === "preview_click" && typeof event.detail["x"] === "number"
-            ? { x: event.detail["x"] as number, y: event.detail["y"] as number, visible: true }
-            : b.agentCursor,
-        }));
+        this.patchBrowser(event.sessionId, (b) => {
+          const next = {
+            ...b,
+            workLog: [...b.workLog, { verb: event.verb, detail: event.detail, at: event.at }].slice(-200),
+            controller: event.verb.startsWith("preview_") ? "agent" : b.controller,
+            agentCursor: event.verb === "preview_click" && typeof event.detail["x"] === "number"
+              ? { x: event.detail["x"] as number, y: event.detail["y"] as number, visible: true }
+              : b.agentCursor,
+          };
+          if (b.defaults?.autoShowFloatingPreview && event.verb.startsWith("preview_")) {
+            next.miniPlayerOpen = true;
+          }
+          return next;
+        });
         break;
       case "browser-pick":
-        this.attachBrowserPick(event.sessionId, event.payload);
-        this.patchBrowser(event.sessionId, (b) => ({ ...b, pickActive: false }));
+        this.patchBrowser(event.sessionId, (b) => ({
+          ...b,
+          pickActive: false,
+          pendingPick: { tabId: event.tabId, payload: event.payload },
+        }));
         break;
       case "sessions-changed":
         this.scheduleRefresh();
@@ -2752,9 +2762,10 @@ export class HeliconController {
 
   async ensureBrowser(sessionId: string): Promise<void> {
     try {
-      const [tabs, servers] = await Promise.all([
+      const [tabs, servers, defaults] = await Promise.all([
         this.client.listBrowserTabs(sessionId),
         this.client.listDiscoveredServers(),
+        this.client.getBrowserDefaults(),
       ]);
       const activeTabId = tabs[0]?.tabId ?? null;
       this.patchBrowser(sessionId, (b) => ({
@@ -2762,6 +2773,7 @@ export class HeliconController {
         tabs,
         activeTabId,
         discovered: servers,
+        defaults,
         loading: false,
       }));
       if (activeTabId) {
@@ -2843,6 +2855,21 @@ export class HeliconController {
     this.browserPipOpener = opener;
   }
 
+  dismissBrowserPick(sessionId: string): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, pendingPick: null }));
+  }
+
+  async submitBrowserPickAnnotation(sessionId: string, comment: string): Promise<void> {
+    const pending = this.state.browser[sessionId]?.pendingPick;
+    if (!pending) {
+      return;
+    }
+    const merged = { ...pending.payload, text: comment.trim() || pending.payload["text"] };
+    await this.client.submitBrowserPickAnnotation(sessionId, pending.tabId, merged);
+    this.attachBrowserPick(sessionId, merged);
+    this.patchBrowser(sessionId, (b) => ({ ...b, pendingPick: null }));
+  }
+
   attachBrowserPick(sessionId: string, payload: Record<string, unknown>): void {
     const png = typeof payload["pngBase64"] === "string" ? payload["pngBase64"] : null;
     const label =
@@ -2908,6 +2935,52 @@ export class HeliconController {
       await this.browserPipOpener(pipUrl);
     } else {
       window.open(pipUrl, "_blank", "noopener,noreferrer,width=480,height=300");
+    }
+  }
+
+  async resizeBrowserViewport(
+    sessionId: string,
+    tabId: string,
+    viewport: import("../types.js").BrowserTabSnapshot["viewport"],
+  ): Promise<void> {
+    const tab = await this.client.resizeBrowserTab(sessionId, tabId, viewport);
+    this.patchBrowser(sessionId, (b) => ({
+      ...b,
+      tabs: b.tabs.map((t) => (t.tabId === tabId ? tab : t)),
+    }));
+  }
+
+  async setBrowserAppearance(
+    sessionId: string,
+    tabId: string,
+    appearance: import("../types.js").BrowserTabSnapshot["colorScheme"],
+  ): Promise<void> {
+    const tab = await this.client.setBrowserAppearance(sessionId, tabId, appearance);
+    this.patchBrowser(sessionId, (b) => ({
+      ...b,
+      tabs: b.tabs.map((t) => (t.tabId === tabId ? tab : t)),
+    }));
+  }
+
+  async openBrowserDevTools(sessionId: string, tabId: string): Promise<void> {
+    await this.client.openBrowserDevTools(sessionId, tabId);
+    this.toast("info", "DevTools", "Opening Chromium DevTools in your default browser.");
+  }
+
+  setBrowserDownloadsOpen(sessionId: string, open: boolean): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, downloadsOpen: open }));
+  }
+
+  async refreshBrowserDownloads(sessionId: string): Promise<void> {
+    await this.client.listBrowserDownloads();
+    this.patchBrowser(sessionId, (b) => b);
+  }
+
+  async patchBrowserDefaults(patch: Partial<import("../client.js").BrowserDefaultsView>): Promise<void> {
+    const defaults = await this.client.patchBrowserDefaults(patch);
+    const sessionId = this.state.route.kind === "thread" ? this.state.route.sessionId : null;
+    if (sessionId) {
+      this.patchBrowser(sessionId, (b) => ({ ...b, defaults }));
     }
   }
 

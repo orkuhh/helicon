@@ -163,6 +163,9 @@ const s=new EventSource(u);s.addEventListener('frame',e=>{const d=JSON.parse(e.d
     if (rest === "/tabs" && method === "POST") {
       const body = await readBody();
       const url = typeof body["url"] === "string" ? body["url"] : undefined;
+      if (url) {
+        await this.guard(sessionId, "preview_open", { url });
+      }
       const profileId = typeof body["profileId"] === "string" ? body["profileId"] : undefined;
       const tab = await this.host.openTab(sessionId, url, profileId);
       this.emitBrowser(sessionId, "browser.opened", { tab });
@@ -185,6 +188,7 @@ const s=new EventSource(u);s.addEventListener('frame',e=>{const d=JSON.parse(e.d
     }
     if (action === "/navigate" && method === "POST") {
       const body = await readBody();
+      await this.guard(sessionId, "preview_navigate", body);
       const tab = await this.navigateBody(sessionId, tabId, body);
       this.emitBrowser(sessionId, "browser.navigated", { tab });
       this.json(res, 200, { tab });

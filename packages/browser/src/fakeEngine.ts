@@ -211,6 +211,9 @@ export function createFakeEngine(options: BrowserEngineOptions): BrowserEngine {
     async openDevTools() {
       return;
     },
+    async getDevToolsFrontendUrl() {
+      return "https://example.com/devtools";
+    },
     subscribeFrames(tabId, onFrame) {
       let set = frameSubs.get(tabId);
       if (!set) {

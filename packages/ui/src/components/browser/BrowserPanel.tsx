@@ -5,6 +5,10 @@ import { useOverlayDragProps } from "../../app/frame.js";
 import { DEFAULT_BROWSER_WIDTH, BROWSER_WIDTH_MIN, BROWSER_WIDTH_MAX } from "../../model/store.js";
 import { Button, IconButton, Spinner, cn } from "../ui/primitives.js";
 import { AgentBrowserCursor } from "./AgentBrowserCursor.js";
+import { BrowserAnnotateDialog } from "./BrowserAnnotateDialog.js";
+import { BrowserDeviceToolbar } from "./BrowserDeviceToolbar.js";
+import { BrowserDownloadsPanel } from "./BrowserDownloadsPanel.js";
+import { BrowserMoreMenu } from "./BrowserMoreMenu.js";
 import { PreviewUnreachable } from "./PreviewUnreachable.js";
 
 export function BrowserPanel(props: { sessionId: string }) {
@@ -38,6 +42,13 @@ export function BrowserPanel(props: { sessionId: string }) {
   }, [browser?.frameDataUrl]);
 
   const active = browser?.tabs.find((t) => t.tabId === browser.activeTabId) ?? browser?.tabs[0] ?? null;
+  const pending = browser?.pendingPick;
+  const pickLabel =
+    pending && typeof pending.payload["selector"] === "string"
+      ? pending.payload["selector"]
+      : pending && typeof pending.payload["text"] === "string"
+        ? pending.payload["text"]
+        : "element";
 
   return (
     <aside
@@ -71,6 +82,12 @@ export function BrowserPanel(props: { sessionId: string }) {
           <Plus size={14} />
         </IconButton>
       </div>
+      {active ? (
+        <BrowserDeviceToolbar
+          tab={active}
+          onViewport={(viewport) => void controller.resizeBrowserViewport(props.sessionId, active.tabId, viewport)}
+        />
+      ) : null}
       <div className="flex flex-wrap items-center gap-1 border-b border-line px-2 py-1.5">
         <IconButton
           label="Reload"
@@ -112,6 +129,14 @@ export function BrowserPanel(props: { sessionId: string }) {
         >
           <PictureInPicture2 size={14} className="rotate-180" />
         </IconButton>
+        {active ? (
+          <BrowserMoreMenu
+            tab={active}
+            onAppearance={(scheme) => void controller.setBrowserAppearance(props.sessionId, active.tabId, scheme)}
+            onDevTools={() => void controller.openBrowserDevTools(props.sessionId, active.tabId)}
+            onDownloads={() => controller.setBrowserDownloadsOpen(props.sessionId, true)}
+          />
+        ) : null}
         <input
           className="min-w-0 flex-1 rounded border border-line bg-canvas px-2 py-1 text-xs font-mono text-fg"
           value={urlDraft || active?.url || ""}
@@ -168,6 +193,16 @@ export function BrowserPanel(props: { sessionId: string }) {
             {browser?.agentCursor?.visible ? (
               <AgentBrowserCursor x={browser.agentCursor.x} y={browser.agentCursor.y} visible />
             ) : null}
+            <BrowserAnnotateDialog
+              open={Boolean(pending)}
+              selectorLabel={pickLabel}
+              onCancel={() => controller.dismissBrowserPick(props.sessionId)}
+              onSubmit={(comment) => void controller.submitBrowserPickAnnotation(props.sessionId, comment)}
+            />
+            <BrowserDownloadsPanel
+              open={browser?.downloadsOpen ?? false}
+              onClose={() => controller.setBrowserDownloadsOpen(props.sessionId, false)}
+            />
           </>
         )}
       </div>
