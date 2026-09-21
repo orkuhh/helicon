@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { URL } from "node:url";
 import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { BrowserHost, type HeliconStore } from "@helicon/daemon";
 import type { BrowserTabSnapshot, FramePayload } from "@helicon/browser";
 import { HttpError } from "./httpError.js";
@@ -37,6 +39,20 @@ export class BrowserApi {
     });
     this.host.setTabOpenedHandler((sessionId, tab) => {
       this.emitBrowser(sessionId, "browser.opened", { tab });
+    });
+    this.host.setCrashHandler((sessionId, tabId, phase) => {
+      this.emitBrowser(sessionId, "browser.crash", { tabId, phase });
+      if (phase === "failed") {
+        void this.host
+          .engineForAutomation()
+          .listTabs()
+          .then((tabs) => {
+            const tab = tabs.find((t) => t.tabId === tabId);
+            if (tab) {
+              this.emitBrowser(sessionId, "browser.navigated", { tab });
+            }
+          });
+      }
     });
   }
 
@@ -243,7 +259,12 @@ const s=new EventSource(u);s.addEventListener('frame',e=>{const d=JSON.parse(e.d
     }
     if (action === "/screenshot" && method === "POST") {
       const bytes = await this.host.engineForAutomation().captureScreenshot(tabId);
-      this.json(res, 200, { pngBase64: bytes.toString("base64") });
+      const dir = this.host.artifactsPath("screenshots");
+      await mkdir(dir, { recursive: true });
+      const filename = `${randomUUID()}.png`;
+      const path = join(dir, filename);
+      await writeFile(path, bytes);
+      this.json(res, 200, { pngBase64: bytes.toString("base64"), path });
       return true;
     }
     if (action === "/click" && method === "POST") {
@@ -351,6 +372,34 @@ const s=new EventSource(u);s.addEventListener('frame',e=>{const d=JSON.parse(e.d
     }
     if (action === "/devtools" && method === "POST") {
       await this.host.engineForAutomation().openDevTools(tabId);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (action === "/context-menu/probe" && method === "POST") {
+      const body = await readBody();
+      const tab = await this.host.engineForAutomation().listTabs().then((tabs) => tabs.find((t) => t.tabId === tabId));
+      const vw = tab?.viewport.width ?? 1280;
+      const vh = tab?.viewport.height ?? 720;
+      const cw = Number(body["canvasWidth"]) || vw;
+      const ch = Number(body["canvasHeight"]) || vh;
+      const x = (Number(body["x"]) / cw) * vw;
+      const y = (Number(body["y"]) / ch) * vh;
+      this.host.bumpControlEpoch(tabId);
+      const probe = await this.host.engineForAutomation().probeContextMenu(tabId, x, y);
+      this.json(res, 200, { probe });
+      return true;
+    }
+    if (action === "/context-menu/action" && method === "POST") {
+      const body = await readBody();
+      const tab = await this.host.engineForAutomation().listTabs().then((tabs) => tabs.find((t) => t.tabId === tabId));
+      const vw = tab?.viewport.width ?? 1280;
+      const vh = tab?.viewport.height ?? 720;
+      const cw = Number(body["canvasWidth"]) || vw;
+      const ch = Number(body["canvasHeight"]) || vh;
+      const x = (Number(body["x"]) / cw) * vw;
+      const y = (Number(body["y"]) / ch) * vh;
+      this.host.bumpControlEpoch(tabId);
+      await this.host.engineForAutomation().runContextMenuAction(tabId, x, y, body["action"] as never);
       this.json(res, 200, { ok: true });
       return true;
     }

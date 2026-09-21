@@ -1,9 +1,12 @@
-import { RotateCw } from "lucide-react";
+import { Lock, RotateCw, Unlock } from "lucide-react";
 import type { BrowserTabSnapshot } from "../../types.js";
+import { cn } from "../ui/primitives.js";
 import { DEVICE_PRESETS, ZOOM_LADDER } from "./browserUiConstants.js";
 
 export function BrowserDeviceToolbar(props: {
   tab: BrowserTabSnapshot;
+  aspectLocked: boolean;
+  onAspectLockedChange: (locked: boolean) => void;
   onViewport: (viewport: BrowserTabSnapshot["viewport"]) => void;
 }) {
   const vp = props.tab.viewport;
@@ -71,6 +74,14 @@ export function BrowserDeviceToolbar(props: {
             onClick={() => props.onViewport({ ...vp, width: vp.height, height: vp.width })}
           >
             <RotateCw size={12} />
+          </button>
+          <button
+            type="button"
+            className={cn("rounded p-0.5 hover:bg-hover", props.aspectLocked ? "text-accent-text" : "text-muted")}
+            title={props.aspectLocked ? "Unlock aspect ratio" : "Lock aspect ratio"}
+            onClick={() => props.onAspectLockedChange(!props.aspectLocked)}
+          >
+            {props.aspectLocked ? <Lock size={12} /> : <Unlock size={12} />}
           </button>
         </>
       ) : null}

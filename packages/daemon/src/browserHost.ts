@@ -44,6 +44,7 @@ export class BrowserHost {
   private wslHostsLoaded = false;
   private onPickComplete?: (tabId: string, sessionId: string, payload: Record<string, unknown>) => void;
   private onTabOpened?: (sessionId: string, tab: BrowserTabSnapshot) => void;
+  private onCrashState?: (sessionId: string, tabId: string, phase: "recovering" | "failed" | "idle") => void;
 
   constructor(
     private readonly store: HeliconStore,
@@ -88,6 +89,12 @@ export class BrowserHost {
         onPopupTab: (parentTabId, tab) => {
           void this.registerEngineTab(parentTabId, tab);
         },
+        onCrashState: (tabId, phase) => {
+          const sessionId = this.tabSession.get(tabId);
+          if (sessionId) {
+            this.onCrashState?.(sessionId, tabId, phase);
+          }
+        },
       });
     } else {
       const defaults = this.getDefaults();
@@ -108,6 +115,12 @@ export class BrowserHost {
         onPopupTab: (parentTabId, tab) => {
           void this.registerEngineTab(parentTabId, tab);
         },
+        onCrashState: (tabId, phase) => {
+          const sessionId = this.tabSession.get(tabId);
+          if (sessionId) {
+            this.onCrashState?.(sessionId, tabId, phase);
+          }
+        },
       });
     }
     const engine = this.engine;
@@ -124,6 +137,10 @@ export class BrowserHost {
 
   setTabOpenedHandler(handler: (sessionId: string, tab: BrowserTabSnapshot) => void): void {
     this.onTabOpened = handler;
+  }
+
+  setCrashHandler(handler: (sessionId: string, tabId: string, phase: "recovering" | "failed" | "idle") => void): void {
+    this.onCrashState = handler;
   }
 
   sessionIdForTab(tabId: string): string | null {

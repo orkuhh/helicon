@@ -9,6 +9,8 @@ import {
   type ApprovalDecisionInput,
   type ApprovalMode,
   type AttachmentView,
+  type BrowserContextMenuAction,
+  type BrowserContextMenuProbe,
   type DirectoryListing,
   type EnvironmentStatus,
   type EventHandler,
@@ -476,9 +478,42 @@ export class WebHeliconClient implements HeliconClient {
     await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/pick/cancel`, {});
   }
 
-  async captureBrowserScreenshot(sessionId: string, tabId: string): Promise<string> {
-    const body = await call<{ pngBase64: string }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/screenshot`, {});
-    return body.pngBase64;
+  async captureBrowserScreenshot(sessionId: string, tabId: string): Promise<{ pngBase64: string; path: string }> {
+    return await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/screenshot`, {});
+  }
+
+  async probeBrowserContextMenu(
+    sessionId: string,
+    tabId: string,
+    x: number,
+    y: number,
+    canvasWidth: number,
+    canvasHeight: number,
+  ): Promise<BrowserContextMenuProbe> {
+    const body = await call<{ probe: BrowserContextMenuProbe }>(
+      "POST",
+      `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/context-menu/probe`,
+      { x, y, canvasWidth, canvasHeight },
+    );
+    return body.probe;
+  }
+
+  async runBrowserContextMenuAction(
+    sessionId: string,
+    tabId: string,
+    x: number,
+    y: number,
+    canvasWidth: number,
+    canvasHeight: number,
+    action: BrowserContextMenuAction,
+  ): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/context-menu/action`, {
+      x,
+      y,
+      canvasWidth,
+      canvasHeight,
+      action,
+    });
   }
 
   async startBrowserRecording(sessionId: string, tabId: string): Promise<void> {

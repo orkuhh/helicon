@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { BrowserContextMenuAction } from "./editingContext.js";
 import type { BrowserEngine, BrowserEngineOptions, ClickInput, NavigateInput, OpenTabInput, PressInput, ScrollInput, TypeInput, WaitForInput, EvaluateInput } from "./engine.js";
 import type { AutomationSnapshot, BrowserDownload, BrowserTabSnapshot, ColorScheme, FramePayload, ViewportState } from "./types.js";
 import { DEFAULT_VIEWPORT } from "./types.js";
@@ -152,6 +153,21 @@ export function createFakeEngine(options: BrowserEngineOptions): BrowserEngine {
     },
     async captureScreenshot() {
       return Buffer.from("fakepng");
+    },
+    async probeContextMenu() {
+      return {
+        canCut: true,
+        canCopy: true,
+        canPaste: true,
+        canSelectAll: true,
+        linkUrl: "https://example.com",
+        imageUrl: null,
+        misspelledWord: "helicn",
+        spellSuggestions: ["helicon", "helix"],
+      };
+    },
+    async runContextMenuAction(_tabId, _x, _y, _action: BrowserContextMenuAction) {
+      return;
     },
     async captureSnapshot(tabId): Promise<AutomationSnapshot> {
       const t = tabs.get(tabId);

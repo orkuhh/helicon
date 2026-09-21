@@ -480,6 +480,26 @@ export interface TranscriptLoad {
   readOnlyReason: string | null;
 }
 
+export interface BrowserContextMenuProbe {
+  canCut: boolean;
+  canCopy: boolean;
+  canPaste: boolean;
+  canSelectAll: boolean;
+  linkUrl: string | null;
+  imageUrl: string | null;
+  misspelledWord: string | null;
+  spellSuggestions: string[];
+}
+
+export type BrowserContextMenuAction =
+  | "cut"
+  | "copy"
+  | "paste"
+  | "selectAll"
+  | "copyLink"
+  | "copyImage"
+  | { type: "replaceSpelling"; suggestion: string };
+
 export interface BrowserTabSnapshot {
   tabId: string;
   url: string;

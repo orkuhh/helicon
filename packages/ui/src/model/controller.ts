@@ -790,6 +790,20 @@ export class HeliconController {
         this.addShellRun(event.sessionId, event.run);
         break;
       case "browser": {
+        if (event.method === "browser.crash") {
+          const tabId = String(event.params["tabId"] ?? "");
+          const phase = String(event.params["phase"] ?? "idle");
+          this.patchBrowser(event.sessionId, (b) => ({
+            ...b,
+            crashRecovery:
+              phase === "idle" ? null : { tabId, phase: phase as "recovering" | "failed" },
+            loading: phase === "recovering",
+          }));
+          if (phase === "failed") {
+            this.toast("error", "Browser tab crashed", "Too many crashes in a short time. Reload to try again.");
+          }
+          break;
+        }
         const tab = event.params["tab"] as import("../types.js").BrowserTabSnapshot | undefined;
         if (tab) {
           this.patchBrowser(event.sessionId, (b) => ({
@@ -801,6 +815,8 @@ export class HeliconController {
             loading: false,
             unreachable: tab.failed,
             miniPlayerOpen: b.defaults?.autoShowFloatingPreview ? true : b.miniPlayerOpen,
+            crashRecovery:
+              b.crashRecovery?.tabId === tab.tabId && !tab.failed ? null : b.crashRecovery,
           }));
         }
         break;
@@ -2941,8 +2957,18 @@ export class HeliconController {
   }
 
   async captureBrowserScreenshot(sessionId: string, tabId: string): Promise<void> {
-    const png = await this.client.captureBrowserScreenshot(sessionId, tabId);
-    this.attachBrowserPick(sessionId, { pngBase64: png, text: "screenshot", selector: "viewport" });
+    const shot = await this.client.captureBrowserScreenshot(sessionId, tabId);
+    this.attachBrowserPick(sessionId, { pngBase64: shot.pngBase64, text: "screenshot", selector: "viewport" });
+    try {
+      const blob = await fetch(`data:image/png;base64,${shot.pngBase64}`).then((r) => r.blob());
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    } catch {
+      /* clipboard may be denied in some shells */
+    }
+    this.toast("info", "Screenshot saved", "Copied image to clipboard.", {
+      label: "Reveal",
+      run: () => void this.revealPath(shot.path),
+    });
   }
 
   async toggleBrowserRecording(sessionId: string, tabId: string, recording: boolean): Promise<void> {
@@ -3055,6 +3081,34 @@ export class HeliconController {
     const x = ((clientX - rect.left) / rect.width) * canvas.width;
     const y = ((clientY - rect.top) / rect.height) * canvas.height;
     await this.client.sendBrowserPointer(sessionId, tabId, x, y, canvas.width, canvas.height);
+    this.patchBrowser(sessionId, (b) => ({ ...b, controller: "human" }));
+  }
+
+  async probeBrowserContextMenu(
+    sessionId: string,
+    tabId: string,
+    clientX: number,
+    clientY: number,
+    canvas: HTMLCanvasElement,
+  ): Promise<import("../types.js").BrowserContextMenuProbe> {
+    const rect = canvas.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((clientY - rect.top) / rect.height) * canvas.height;
+    return await this.client.probeBrowserContextMenu(sessionId, tabId, x, y, canvas.width, canvas.height);
+  }
+
+  async runBrowserContextMenuAction(
+    sessionId: string,
+    tabId: string,
+    clientX: number,
+    clientY: number,
+    canvas: HTMLCanvasElement,
+    action: import("../types.js").BrowserContextMenuAction,
+  ): Promise<void> {
+    const rect = canvas.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((clientY - rect.top) / rect.height) * canvas.height;
+    await this.client.runBrowserContextMenuAction(sessionId, tabId, x, y, canvas.width, canvas.height, action);
     this.patchBrowser(sessionId, (b) => ({ ...b, controller: "human" }));
   }
 

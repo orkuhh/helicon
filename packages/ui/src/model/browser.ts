@@ -30,6 +30,7 @@ export interface BrowserSessionState {
   pendingPick: PendingBrowserPick | null;
   downloadsOpen: boolean;
   defaults: import("../client.js").BrowserDefaultsView | null;
+  crashRecovery: { tabId: string; phase: "recovering" | "failed" } | null;
 }
 
 export function emptyBrowserSession(): BrowserSessionState {
@@ -50,5 +51,6 @@ export function emptyBrowserSession(): BrowserSessionState {
     pendingPick: null,
     downloadsOpen: false,
     defaults: null,
+    crashRecovery: null,
   };
 }

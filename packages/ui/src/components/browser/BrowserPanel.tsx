@@ -24,6 +24,8 @@ import { AgentBrowserCursor } from "./AgentBrowserCursor.js";
 import { BrowserAnnotateDialog } from "./BrowserAnnotateDialog.js";
 import { BrowserContextMenu } from "./BrowserContextMenu.js";
 import { BrowserDeviceToolbar } from "./BrowserDeviceToolbar.js";
+import { BrowserViewportFrame } from "./BrowserViewportFrame.js";
+import type { BrowserContextMenuProbe } from "../../types.js";
 import { BrowserDownloadsPanel } from "./BrowserDownloadsPanel.js";
 import { BrowserMoreMenu } from "./BrowserMoreMenu.js";
 import { PreviewUnreachable } from "./PreviewUnreachable.js";
@@ -33,7 +35,9 @@ export function BrowserPanel(props: { sessionId: string }) {
   const width = useApp((s) => s.prefs.browserWidth);
   const browser = useApp((s) => s.browser[props.sessionId] ?? null, shallowEqual);
   const [urlDraft, setUrlDraft] = useState("");
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [aspectLocked, setAspectLocked] = useState(true);
+  const [menu, setMenu] = useState<{ x: number; y: number; clientX: number; clientY: number } | null>(null);
+  const [menuProbe, setMenuProbe] = useState<BrowserContextMenuProbe | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drag = useOverlayDragProps();
 
@@ -119,6 +123,8 @@ export function BrowserPanel(props: { sessionId: string }) {
       {active ? (
         <BrowserDeviceToolbar
           tab={active}
+          aspectLocked={aspectLocked}
+          onAspectLockedChange={setAspectLocked}
           onViewport={(viewport) => void controller.resizeBrowserViewport(props.sessionId, active.tabId, viewport)}
         />
       ) : null}
@@ -238,32 +244,63 @@ export function BrowserPanel(props: { sessionId: string }) {
           />
         ) : (
           <>
-            <canvas
-              ref={canvasRef}
-              className="h-full w-full cursor-crosshair"
-              onPointerDown={(e) => {
-                if (!active || !canvasRef.current) {
-                  return;
-                }
-                controller.browserHumanInput(props.sessionId, active.tabId);
-                void controller.browserCanvasPointer(props.sessionId, active.tabId, e.clientX, e.clientY, canvasRef.current);
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setMenu({ x: e.clientX, y: e.clientY });
-              }}
-            />
+            <BrowserViewportFrame
+              tab={active}
+              aspectLocked={aspectLocked}
+              onViewport={(viewport) => void controller.resizeBrowserViewport(props.sessionId, active.tabId, viewport)}
+            >
+              <canvas
+                ref={canvasRef}
+                className="max-h-full max-w-full cursor-crosshair"
+                onPointerDown={(e) => {
+                  if (!active || !canvasRef.current) {
+                    return;
+                  }
+                  controller.browserHumanInput(props.sessionId, active.tabId);
+                  void controller.browserCanvasPointer(props.sessionId, active.tabId, e.clientX, e.clientY, canvasRef.current);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  if (!active || !canvasRef.current) {
+                    return;
+                  }
+                  setMenu({ x: e.clientX, y: e.clientY, clientX: e.clientX, clientY: e.clientY });
+                  setMenuProbe(null);
+                  void controller
+                    .probeBrowserContextMenu(props.sessionId, active.tabId, e.clientX, e.clientY, canvasRef.current)
+                    .then(setMenuProbe);
+                }}
+              />
+            </BrowserViewportFrame>
+            {browser?.crashRecovery?.tabId === active.tabId && browser.crashRecovery.phase === "recovering" ? (
+              <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-canvas/85 text-sm text-muted">
+                <span>Recovering from a crash…</span>
+              </div>
+            ) : null}
             <BrowserContextMenu
               open={menu !== null}
               x={menu?.x ?? 0}
               y={menu?.y ?? 0}
-              onClose={() => setMenu(null)}
+              probe={menuProbe}
+              pageUrl={active?.url ?? null}
+              onClose={() => {
+                setMenu(null);
+                setMenuProbe(null);
+              }}
               onReload={() => active && void controller.reloadBrowserTab(props.sessionId, active.tabId)}
               onHardReload={() => active && void controller.hardReloadBrowserTab(props.sessionId, active.tabId)}
-              onCopyLink={() => {
-                if (active?.url) {
-                  void navigator.clipboard.writeText(active.url);
+              onAction={(action) => {
+                if (!active || !canvasRef.current || !menu) {
+                  return;
                 }
+                void controller.runBrowserContextMenuAction(
+                  props.sessionId,
+                  active.tabId,
+                  menu.clientX,
+                  menu.clientY,
+                  canvasRef.current,
+                  action,
+                );
               }}
             />
             {browser?.agentCursor?.visible ? (

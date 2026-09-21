@@ -354,8 +354,21 @@ class FakeClient implements HeliconClient {
   async startBrowserPick() {}
   async cancelBrowserPick() {}
   async captureBrowserScreenshot() {
-    return "";
+    return { pngBase64: "", path: "/tmp/s.png" };
   }
+  async probeBrowserContextMenu() {
+    return {
+      canCut: false,
+      canCopy: false,
+      canPaste: false,
+      canSelectAll: false,
+      linkUrl: null,
+      imageUrl: null,
+      misspelledWord: null,
+      spellSuggestions: [],
+    };
+  }
+  async runBrowserContextMenuAction() {}
   async startBrowserRecording() {}
   async stopBrowserRecording() {
     return { path: "/tmp/x.webm", bytes: 0 };

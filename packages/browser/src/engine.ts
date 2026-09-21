@@ -1,3 +1,4 @@
+import type { BrowserContextMenuAction, BrowserContextMenuProbe } from "./editingContext.js";
 import type {
   AutomationSnapshot,
   BrowserDownload,
@@ -73,6 +74,8 @@ export interface BrowserEngine {
   setColorScheme(tabId: string, scheme: ColorScheme): Promise<BrowserTabSnapshot>;
   setMuted(tabId: string, muted: boolean): Promise<BrowserTabSnapshot>;
   captureScreenshot(tabId: string): Promise<Buffer>;
+  probeContextMenu(tabId: string, x: number, y: number): Promise<BrowserContextMenuProbe>;
+  runContextMenuAction(tabId: string, x: number, y: number, action: BrowserContextMenuAction): Promise<void>;
   captureSnapshot(tabId: string): Promise<AutomationSnapshot>;
   click(tabId: string, input: ClickInput): Promise<void>;
   type(tabId: string, input: TypeInput): Promise<void>;
@@ -105,4 +108,5 @@ export interface BrowserEngineOptions {
   recordingShowKeyPresses?: boolean;
   grantedPermissions?: import("./types.js").BrowserPermission[];
   onPopupTab?: (parentTabId: string, tab: import("./types.js").BrowserTabSnapshot) => void;
+  onCrashState?: (tabId: string, phase: "recovering" | "failed" | "idle") => void;
 }

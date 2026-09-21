@@ -172,7 +172,24 @@ export interface HeliconClient {
   browserPipUrl(sessionId: string, tabId: string): string;
   startBrowserPick(sessionId: string, tabId: string): Promise<void>;
   cancelBrowserPick(sessionId: string, tabId: string): Promise<void>;
-  captureBrowserScreenshot(sessionId: string, tabId: string): Promise<string>;
+  captureBrowserScreenshot(sessionId: string, tabId: string): Promise<{ pngBase64: string; path: string }>;
+  probeBrowserContextMenu(
+    sessionId: string,
+    tabId: string,
+    x: number,
+    y: number,
+    canvasWidth: number,
+    canvasHeight: number,
+  ): Promise<import("./types.js").BrowserContextMenuProbe>;
+  runBrowserContextMenuAction(
+    sessionId: string,
+    tabId: string,
+    x: number,
+    y: number,
+    canvasWidth: number,
+    canvasHeight: number,
+    action: import("./types.js").BrowserContextMenuAction,
+  ): Promise<void>;
   startBrowserRecording(sessionId: string, tabId: string): Promise<void>;
   stopBrowserRecording(sessionId: string, tabId: string): Promise<{ path: string; bytes: number }>;
   sendBrowserPointer(sessionId: string, tabId: string, x: number, y: number, canvasWidth: number, canvasHeight: number): Promise<void>;

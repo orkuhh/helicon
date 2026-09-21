@@ -15,6 +15,13 @@ import type {
   WaitForInput,
   EvaluateInput,
 } from "./engine.js";
+import {
+  probeContextMenuAt,
+  runContextMenuActionAt,
+  type BrowserContextMenuAction,
+  type BrowserContextMenuProbe,
+} from "./editingContext.js";
+import { osSpellSuggestions } from "./spellSuggestions.js";
 import type {
   AutomationSnapshot,
   BrowserDownload,
@@ -321,7 +328,7 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
         void syncSnapshot(tabs.get(popupId)!);
       });
       page.on("crash", () => {
-        void recoverCrash(tabId);
+        void recoverCrash(tabId, options);
       });
       if (input.url) {
         await navigateInternal(tabId, { url: input.url });
@@ -424,6 +431,27 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
         throw new Error("Tab not found");
       }
       return tab.page.screenshot({ type: "png" });
+    },
+    async probeContextMenu(tabId, x, y): Promise<BrowserContextMenuProbe> {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await attachDiagnostics(tab);
+      await tab.page.mouse.click(x, y);
+      const probe = await probeContextMenuAt(tab.page, x, y);
+      if (probe.misspelledWord && probe.spellSuggestions.length === 0) {
+        probe.spellSuggestions = await osSpellSuggestions(probe.misspelledWord);
+      }
+      return probe;
+    },
+    async runContextMenuAction(tabId, x, y, action: BrowserContextMenuAction) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await attachDiagnostics(tab);
+      await runContextMenuActionAt(tab.page, x, y, action);
     },
     async captureSnapshot(tabId): Promise<AutomationSnapshot> {
       const tab = tabs.get(tabId);
@@ -701,7 +729,7 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
     },
   };
 
-  async function recoverCrash(tabId: string): Promise<void> {
+  async function recoverCrash(tabId: string, engineOptions: BrowserEngineOptions): Promise<void> {
     const tab = tabs.get(tabId);
     if (!tab) {
       return;
@@ -709,19 +737,30 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
     const now = Date.now();
     tab.crashAttempts = tab.crashAttempts.filter((t) => now - t < 30_000);
     if (tab.crashAttempts.length >= 3) {
+      tab.snapshot = {
+        ...tab.snapshot,
+        failed: "ERR_TAB_CRASHED",
+        loading: false,
+      };
+      engineOptions.onCrashState?.(tabId, "failed");
       return;
     }
     tab.crashAttempts.push(now);
+    engineOptions.onCrashState?.(tabId, "recovering");
     const delay = 250 * 2 ** tab.crashAttempts.length;
     await new Promise((r) => setTimeout(r, delay));
     const url = tab.snapshot.url;
     const page = await tab.context.newPage();
     tab.page = page;
     tab.cdp = null;
+    page.on("crash", () => {
+      void recoverCrash(tabId, engineOptions);
+    });
     if (url && url !== "about:blank") {
       await page.goto(url).catch(() => undefined);
     }
     await syncSnapshot(tab);
+    engineOptions.onCrashState?.(tabId, "idle");
   }
 
   return engine;
