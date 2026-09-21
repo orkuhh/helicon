@@ -45,18 +45,18 @@ export async function probeContextMenuAt(page: Page, x: number, y: number): Prom
       const canSelectAll = document.queryCommandEnabled("selectAll");
       let misspelledWord: string | null = null;
       const spellSuggestions: string[] = [];
-      const editable =
-        el instanceof HTMLInputElement ||
-        el instanceof HTMLTextAreaElement ||
-        (el instanceof HTMLElement && el.isContentEditable);
-      if (editable) {
+      const editableTarget =
+        (el instanceof HTMLElement && el.closest("input,textarea,[contenteditable=true]")) ??
+        (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el : null) ??
+        (el instanceof HTMLElement && el.isContentEditable ? el : null);
+      if (editableTarget instanceof HTMLElement) {
         const sel = window.getSelection();
         const text = sel?.toString() ?? "";
         if (text && /^[\w'-]+$/.test(text)) {
           misspelledWord = text;
-        } else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-          const value = el.value;
-          const pos = el.selectionStart ?? 0;
+        } else if (editableTarget instanceof HTMLInputElement || editableTarget instanceof HTMLTextAreaElement) {
+          const value = editableTarget.value;
+          const pos = editableTarget.selectionStart ?? 0;
           let start = pos;
           while (start > 0 && /[\w'-]/.test(value[start - 1])) {
             start -= 1;
@@ -70,7 +70,7 @@ export async function probeContextMenuAt(page: Page, x: number, y: number): Prom
             misspelledWord = word;
           }
         }
-        const raw = el instanceof HTMLElement ? el.getAttribute("data-helicon-spell-suggestions") : null;
+        const raw = editableTarget.getAttribute("data-helicon-spell-suggestions");
         if (raw) {
           try {
             const parsed = JSON.parse(raw) as unknown;

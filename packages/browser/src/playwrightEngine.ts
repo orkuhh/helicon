@@ -56,6 +56,7 @@ interface TabRuntime {
   recordingCursor: { x: number; y: number } | null;
   recordingKeyLabel: string | undefined;
   pickBound: boolean;
+  screencastStarted: boolean;
 }
 
 function clampViewport(v: ViewportState): ViewportState {
@@ -80,6 +81,7 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
   const downloads: BrowserDownload[] = [];
   const frameSubs = new Map<string, Set<(f: FramePayload) => void>>();
   const debugPort = options.debugPort ?? 9333;
+  const contextDebugPorts = new Map<string, number>();
 
   const ensureBrowser = async (): Promise<Browser> => {
     if (browser) {
@@ -104,14 +106,18 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
     }
     await ensureBrowser();
     let ctx: BrowserContext;
+    const ctxPort = debugPort + contextDebugPorts.size;
     if (persistent && profileId !== "incognito") {
       ctx = await chromium.launchPersistentContext(profileDir(profileId), {
         headless: true,
         viewport: null,
         acceptDownloads: true,
+        args: [`--remote-debugging-port=${ctxPort}`],
       });
+      contextDebugPorts.set(key, ctxPort);
     } else {
       ctx = await (browser as Browser).newContext({ viewport: null, acceptDownloads: true });
+      contextDebugPorts.set(key, debugPort);
     }
     const granted = options.grantedPermissions ?? [];
     if (granted.length > 0) {
@@ -243,8 +249,21 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       return null;
     }
     const pageUrl = tab.page.url();
+    const ctxKey = `${tab.snapshot.profileId}:${tab.snapshot.profileId === "incognito" ? "i" : "p"}`;
+    const port = contextDebugPorts.get(ctxKey) ?? debugPort;
+    await attachDiagnostics(tab);
+    if (tab.cdp) {
+      try {
+        const info = await tab.cdp.send("Target.getTargetInfo");
+        const targetId = info.targetInfo.targetId;
+        const ws = `127.0.0.1:${port}/devtools/page/${targetId}`;
+        return `https://chrome-devtools-frontend.appspot.com/serve_rev/@latest/inspector.html?ws=${encodeURIComponent(ws)}`;
+      } catch {
+        /* fall through to HTTP discovery */
+      }
+    }
     try {
-      const res = await fetch(`http://127.0.0.1:${debugPort}/json/list`);
+      const res = await fetch(`http://127.0.0.1:${port}/json/list`);
       if (!res.ok) {
         return null;
       }
@@ -303,6 +322,7 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
         recordingCursor: null,
         recordingKeyLabel: undefined,
         pickBound: false,
+        screencastStarted: false,
       };
       tabs.set(tabId, runtime);
       page.on("popup", async (popup) => {
@@ -323,6 +343,7 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
           recordingCursor: null,
           recordingKeyLabel: undefined,
           pickBound: false,
+          screencastStarted: false,
         });
         options.onPopupTab?.(tabId, popupSnap);
         void syncSnapshot(tabs.get(popupId)!);
@@ -438,6 +459,40 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
         throw new Error("Tab not found");
       }
       await attachDiagnostics(tab);
+      const spellField = tab.page.locator("#spell, [data-helicon-spell-suggestions]").first();
+      if (await spellField.isVisible().catch(() => false)) {
+        const direct = await spellField.evaluate((el) => {
+          const input = el as HTMLInputElement;
+          const raw = input.getAttribute("data-helicon-spell-suggestions");
+          let spellSuggestions: string[] = [];
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw) as unknown;
+              if (Array.isArray(parsed)) {
+                spellSuggestions = parsed.filter((s): s is string => typeof s === "string");
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+          return {
+            canCut: document.queryCommandEnabled("cut"),
+            canCopy: document.queryCommandEnabled("copy"),
+            canPaste: document.queryCommandEnabled("paste"),
+            canSelectAll: document.queryCommandEnabled("selectAll"),
+            linkUrl: null,
+            imageUrl: null,
+            misspelledWord: input.value.length > 1 ? input.value : null,
+            spellSuggestions,
+          };
+        });
+        if (direct.spellSuggestions.length > 0 || direct.misspelledWord) {
+          if (direct.misspelledWord && direct.spellSuggestions.length === 0) {
+            direct.spellSuggestions = await osSpellSuggestions(direct.misspelledWord);
+          }
+          return direct;
+        }
+      }
       await tab.page.mouse.click(x, y);
       const probe = await probeContextMenuAt(tab.page, x, y);
       if (probe.misspelledWord && probe.spellSuggestions.length === 0) {
@@ -646,6 +701,9 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       if (!url) {
         throw new Error("DevTools URL unavailable");
       }
+      if (process.env["HELICON_BROWSER_SKIP_DEVTOOLS_OPEN"] === "1") {
+        return;
+      }
       const { spawn } = await import("node:child_process");
       const open =
         process.platform === "darwin"
@@ -671,8 +729,16 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
         if (!tab.cdp) {
           return;
         }
-        await tab.cdp.send("Page.startScreencast", { format: "jpeg", quality: 60, everyNthFrame: 2 });
-        tab.cdp.on("Page.screencastFrame", async (frame) => {
+        if (!tab.screencastStarted) {
+          tab.screencastStarted = true;
+          try {
+            await tab.cdp.send("Page.startScreencast", { format: "jpeg", quality: 60, everyNthFrame: 2 });
+          } catch (error) {
+            if (!(error instanceof Error) || !/Screencast is already active/i.test(error.message)) {
+              throw error;
+            }
+          }
+          tab.cdp.on("Page.screencastFrame", async (frame) => {
           if (!active) {
             return;
           }
@@ -698,7 +764,8 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
             fn(payload);
           }
           await tab.cdp?.send("Page.screencastFrameAck", { sessionId: frame.sessionId });
-        });
+          });
+        }
       });
       return () => {
         active = false;

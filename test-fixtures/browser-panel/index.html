@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Helicon browser panel test</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; }
+      a { color: #2563eb; }
+      img { border: 1px solid #ccc; margin-top: 1rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Local browser test page</h1>
+    <p id="status">offline fixture — no external network</p>
+    <p><a href="page2.html">Go to page 2</a></p>
+    <p>
+      <label>
+        Spell:
+        <input
+          id="spell"
+          spellcheck="true"
+          value="helicn"
+          data-helicon-spell-suggestions='["helicon","helix"]'
+        />
+      </label>
+    </p>
+    <p><button type="button" onclick="window.open('popup.html','_blank','width=320,height=240')">Open popup</button></p>
+    <img
+      width="64"
+      height="64"
+      alt="pixel"
+      src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    />
+  </body>
+</html>

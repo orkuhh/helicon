@@ -1731,7 +1731,8 @@ export class HeliconServer {
       return this.envCache.value;
     }
     const hint = this.runtimeHint();
-    const probe = await probeEnvironment(defaultExec, this.options.platform, {
+    const exec = this.options.exec ?? defaultExec;
+    const probe = await probeEnvironment(exec, this.options.platform, {
       preference: hint === "native" || hint === "wsl" ? hint : this.options.runtime,
       ...(this.options.findNativeMuse ? { findNative: this.options.findNativeMuse } : {}),
     });
