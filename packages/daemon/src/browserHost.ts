@@ -2,14 +2,18 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import {
+  buildWslHostUnion,
   createFakeEngine,
   discoverLocalServers,
+  listImportSources,
+  importCookiesFromNetscapeFile,
   type BrowserDefaults,
   type BrowserEngine,
   type BrowserTabSnapshot,
   DEFAULT_BROWSER_DEFAULTS,
   normalizePreviewUrl,
   resolveEnvironmentPortUrl,
+  loadPlaywrightEngine,
 } from "@helicon/browser";
 import type { HeliconStore } from "./store.js";
 
@@ -17,6 +21,7 @@ export interface BrowserHostOptions {
   dataDir?: string;
   useFakeEngine?: boolean;
   wslHosts?: string[];
+  exec?: (command: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
 }
 
 export interface SessionBrowserState {
@@ -31,24 +36,38 @@ export class BrowserHost {
   private readonly profilesDir: string;
   private readonly artifactsDir: string;
   private readonly useFake: boolean;
-  private readonly wslHosts: string[];
+  private wslHosts: string[];
+  private readonly exec?: BrowserHostOptions["exec"];
   private readonly sessionTabs = new Map<string, Set<string>>();
   private readonly tabSession = new Map<string, string>();
   private readonly automationEpoch = new Map<string, number>();
+  private wslHostsLoaded = false;
 
   constructor(
     private readonly store: HeliconStore,
-    options: BrowserHostOptions = {},
+    private readonly hostOptions: BrowserHostOptions = {},
   ) {
-    const base = options.dataDir ?? join(homedir(), ".helicon");
+    const base = hostOptions.dataDir ?? join(homedir(), ".helicon");
     this.dataDir = join(base, "browser");
     this.profilesDir = join(this.dataDir, "profiles");
     this.artifactsDir = join(this.dataDir, "artifacts");
-    this.useFake = options.useFakeEngine ?? process.env["HELICON_BROWSER_FAKE"] === "1";
-    this.wslHosts = options.wslHosts ?? ["localhost", "127.0.0.1"];
+    this.useFake = hostOptions.useFakeEngine ?? process.env["HELICON_BROWSER_FAKE"] === "1";
+    this.wslHosts = hostOptions.wslHosts ?? ["localhost", "127.0.0.1"];
+    this.exec = hostOptions.exec;
   }
 
   async ensureEngine(): Promise<BrowserEngine> {
+    if (!this.wslHostsLoaded && !this.hostOptions.wslHosts) {
+      this.wslHostsLoaded = true;
+      this.wslHosts = await buildWslHostUnion(
+        this.exec
+          ? async (command, args) => {
+              const r = await this.exec!(command, args);
+              return { stdout: r.stdout, stderr: "", code: r.exitCode };
+            }
+          : undefined,
+      );
+    }
     if (this.engine) {
       return this.engine;
     }
@@ -60,8 +79,7 @@ export class BrowserHost {
         wslHosts: this.wslHosts,
       });
     } else {
-      const { createPlaywrightEngine } = require("@helicon/browser/dist/src/playwrightEngine.js") as typeof import("@helicon/browser/dist/src/playwrightEngine.js");
-      this.engine = await createPlaywrightEngine({
+      this.engine = await loadPlaywrightEngine({
         dataDir: this.dataDir,
         profilesDir: this.profilesDir,
         artifactsDir: this.artifactsDir,
@@ -131,7 +149,7 @@ export class BrowserHost {
       return await this.restoreSessionTabs(sessionId);
     }
     const all = await engine.listTabs();
-    return all.filter((t) => ids.has(t.tabId));
+    return all.filter((t: BrowserTabSnapshot) => ids.has(t.tabId));
   }
 
   async closeTab(sessionId: string, tabId?: string): Promise<void> {
@@ -226,5 +244,26 @@ export class BrowserHost {
 
   newArtifactId(): string {
     return randomUUID();
+  }
+
+  async listImportSources() {
+    return await listImportSources();
+  }
+
+  async importCookiesFromFile(filePath: string) {
+    return await importCookiesFromNetscapeFile(filePath);
+  }
+
+  listProfiles(): { id: string; name: string; persistent: boolean; builtIn: boolean }[] {
+    return this.store.listBrowserProfiles();
+  }
+
+  async clearProfileData(profileId: string, what: "cookies" | "cache"): Promise<void> {
+    await this.ensureEngine();
+    if (what === "cookies") {
+      // Playwright persistent contexts store on disk; removing dir is the reliable clear.
+      const { rm } = await import("node:fs/promises");
+      await rm(join(this.profilesDir, profileId), { recursive: true, force: true });
+    }
   }
 }

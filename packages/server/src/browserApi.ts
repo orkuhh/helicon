@@ -11,7 +11,9 @@ export interface BrowserApiOptions {
   store: HeliconStore;
   emit: BrowserEventEmitter;
   useFakeEngine?: boolean;
+  exec?: (command: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>;
   requireApproval?: (sessionId: string, tool: string, detail: Record<string, unknown>) => Promise<boolean>;
+  onWorkLog?: (sessionId: string, verb: string, detail: Record<string, unknown>) => void;
 }
 
 interface FrameSink {
@@ -26,7 +28,10 @@ export class BrowserApi {
   private readonly frameSinks = new Set<FrameSink>();
 
   constructor(private readonly options: BrowserApiOptions) {
-    this.host = new BrowserHost(options.store, { useFakeEngine: options.useFakeEngine });
+    this.host = new BrowserHost(options.store, {
+      useFakeEngine: options.useFakeEngine,
+      exec: options.exec,
+    });
   }
 
   async close(): Promise<void> {
@@ -72,6 +77,49 @@ export class BrowserApi {
       const engine = this.host.engineForAutomation();
       const downloads = await engine.listDownloads();
       this.json(res, 200, { downloads });
+      return true;
+    }
+    if (path === "/api/browser/profiles" && method === "GET") {
+      this.json(res, 200, { profiles: this.host.listProfiles() });
+      return true;
+    }
+    if (path === "/api/browser/profiles" && method === "POST") {
+      const body = await readBody();
+      const id = typeof body["id"] === "string" ? body["id"] : randomUUID().slice(0, 16);
+      const name = typeof body["name"] === "string" ? body["name"] : id;
+      this.options.store.createBrowserProfile(id, name);
+      this.json(res, 200, { ok: true, id });
+      return true;
+    }
+    if (path === "/api/browser/import/sources" && method === "GET") {
+      this.json(res, 200, { sources: await this.host.listImportSources() });
+      return true;
+    }
+    if (path === "/api/browser/import" && method === "POST") {
+      const body = await readBody();
+      const file = typeof body["filePath"] === "string" ? body["filePath"] : "";
+      if (!file) {
+        throw new HttpError(400, "filePath is required.");
+      }
+      const result = await this.host.importCookiesFromFile(file);
+      this.json(res, 200, result);
+      return true;
+    }
+    if (path === "/api/browser/clear" && method === "POST") {
+      const body = await readBody();
+      const profileId = typeof body["profileId"] === "string" ? body["profileId"] : "default";
+      const what = body["what"] === "cache" ? "cache" : "cookies";
+      await this.host.clearProfileData(profileId, what);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (path === "/api/browser/pip.html" && method === "GET") {
+      const sessionId = url.searchParams.get("sessionId") ?? "";
+      const tabId = url.searchParams.get("tabId") ?? "";
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": "img-src data: 'self'" });
+      res.end(`<!doctype html><meta charset=utf-8><title>Preview</title><style>html,body{margin:0;background:#111;height:100%}img{width:100%;height:100%;object-fit:contain}</style><img id=f><script>
+const u=new URL('/api/browser/stream',location.origin);u.searchParams.set('sessionId','${sessionId}');u.searchParams.set('tabId','${tabId}');
+const s=new EventSource(u);s.addEventListener('frame',e=>{const d=JSON.parse(e.data);document.getElementById('f').src=d.dataUrl});</script>`);
       return true;
     }
     if (path.startsWith("/api/browser/stream")) {
@@ -183,8 +231,103 @@ export class BrowserApi {
       this.json(res, 200, { tab });
       return true;
     }
+    if (action === "/resize" && method === "POST") {
+      const body = await readBody();
+      const tab = await this.host.engineForAutomation().setViewport(tabId, body["viewport"] as never);
+      this.json(res, 200, { tab });
+      return true;
+    }
+    if (action === "/appearance" && method === "POST") {
+      const body = await readBody();
+      const tab = await this.host.engineForAutomation().setColorScheme(tabId, body["appearance"] as never);
+      this.json(res, 200, { tab });
+      return true;
+    }
+    if (action === "/type" && method === "POST") {
+      const body = await readBody();
+      await this.guard(sessionId, "preview_type", body);
+      await this.host.engineForAutomation().type(tabId, body as never);
+      this.work(sessionId, "preview_type", body);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (action === "/press" && method === "POST") {
+      const body = await readBody();
+      await this.guard(sessionId, "preview_press", body);
+      await this.host.engineForAutomation().press(tabId, body as never);
+      this.work(sessionId, "preview_press", body);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (action === "/scroll" && method === "POST") {
+      const body = await readBody();
+      await this.host.engineForAutomation().scroll(tabId, body as never);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (action === "/evaluate" && method === "POST") {
+      const body = await readBody();
+      await this.guard(sessionId, "preview_evaluate", body);
+      const result = await this.host.engineForAutomation().evaluate(tabId, body as never);
+      this.work(sessionId, "preview_evaluate", body);
+      this.json(res, 200, { result });
+      return true;
+    }
+    if (action === "/wait" && method === "POST") {
+      const body = await readBody();
+      await this.host.engineForAutomation().waitFor(tabId, body as never);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (action === "/pick/start" && method === "POST") {
+      await this.host.engineForAutomation().startPick(tabId);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (action === "/pick/cancel" && method === "POST") {
+      await this.host.engineForAutomation().cancelPick(tabId);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (action === "/pick/complete" && method === "POST") {
+      const body = await readBody();
+      this.options.emit("browser-pick", { sessionId, tabId, payload: body, at: Date.now() });
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (action === "/recording/start" && method === "POST") {
+      await this.host.engineForAutomation().startRecording(tabId);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (action === "/recording/stop" && method === "POST") {
+      const rec = await this.host.engineForAutomation().stopRecording(tabId);
+      this.work(sessionId, "preview_recording_stop", rec);
+      this.json(res, 200, rec);
+      return true;
+    }
+    if (action === "/devtools" && method === "POST") {
+      await this.host.engineForAutomation().openDevTools(tabId);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (action === "/pointer" && method === "POST") {
+      const body = await readBody();
+      this.host.bumpControlEpoch(tabId);
+      await this.host.engineForAutomation().click(tabId, {
+        x: Number(body["x"]),
+        y: Number(body["y"]),
+      });
+      this.json(res, 200, { ok: true });
+      return true;
+    }
 
     return false;
+  }
+
+  private work(sessionId: string, verb: string, detail: Record<string, unknown>): void {
+    this.options.onWorkLog?.(sessionId, verb, detail);
+    this.options.emit("browser-work", { sessionId, verb, detail, at: Date.now() });
   }
 
   private async navigateBody(sessionId: string, tabId: string, body: Record<string, unknown>): Promise<BrowserTabSnapshot> {

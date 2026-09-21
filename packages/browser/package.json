@@ -8,10 +8,6 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
-    },
-    "./playwrightEngine.js": {
-      "types": "./dist/src/playwrightEngine.d.ts",
-      "default": "./dist/src/playwrightEngine.js"
     }
   },
   "scripts": {

@@ -866,6 +866,28 @@ export class HeliconStore {
     this.db.prepare(`DELETE FROM browser_tab_restore WHERE session_id = ? AND tab_id = ?`).run(sessionId, tabId);
   }
 
+  listBrowserProfiles(): { id: string; name: string; persistent: boolean; builtIn: boolean }[] {
+    const rows = this.db.prepare(`SELECT id, name, persistent, built_in FROM browser_profiles ORDER BY created_at`).all() as Row[];
+    if (rows.length === 0) {
+      return [
+        { id: "default", name: "Default", persistent: true, builtIn: true },
+        { id: "incognito", name: "Incognito", persistent: false, builtIn: true },
+      ];
+    }
+    return rows.map((r) => ({
+      id: String(r["id"]),
+      name: String(r["name"]),
+      persistent: Number(r["persistent"]) === 1,
+      builtIn: Number(r["built_in"]) === 1,
+    }));
+  }
+
+  createBrowserProfile(id: string, name: string): void {
+    this.db
+      .prepare(`INSERT OR IGNORE INTO browser_profiles (id, name, persistent, built_in, created_at) VALUES (?, ?, 1, 0, ?)`)
+      .run(id, name.slice(0, 48), nowIso());
+  }
+
   listBrowserTabRestore(sessionId: string): { tabId: string; url: string; profileId: string }[] {
     const rows = this.db
       .prepare(`SELECT tab_id, url, profile_id FROM browser_tab_restore WHERE session_id = ?`)

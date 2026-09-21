@@ -694,7 +694,11 @@ export class HeliconServer {
       store: this.store,
       emit: (type, data) => this.emit(type, data),
       useFakeEngine: options.browserUseFakeEngine ?? process.env["HELICON_BROWSER_FAKE"] === "1",
+      exec: this.options.exec,
       requireApproval: (sessionId, tool, detail) => this.browserApproval(sessionId, tool, detail),
+      onWorkLog: (sessionId, verb, detail) => {
+        this.emit("browser-work", { sessionId, verb, detail, at: Date.now() });
+      },
     });
     this.mcpToolkit = new PreviewMcpToolkit(
       () => this.mcpSessionId,

@@ -39,6 +39,30 @@ export async function discoverLocalServers(options: PortScannerOptions = {}): Pr
   return servers;
 }
 
+async function scanWslLsof(exec?: PortScannerOptions["exec"]): Promise<DiscoveredServer[]> {
+  if (!exec || process.platform !== "win32") {
+    return [];
+  }
+  try {
+    const { stdout, code } = await exec("wsl.exe", ["-e", "lsof", "-iTCP", "-sTCP:LISTEN", "-P", "-n"]);
+    if (code !== 0) {
+      return [];
+    }
+    const out: DiscoveredServer[] = [];
+    for (const line of stdout.split("\n")) {
+      const m = line.match(/:(\d+)\s+\(LISTEN\)/);
+      if (!m) {
+        continue;
+      }
+      const port = Number(m[1]);
+      out.push({ url: `http://localhost:${port}`, title: null, port, source: "lsof" });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 async function scanLsof(
   exec?: PortScannerOptions["exec"],
 ): Promise<DiscoveredServer[]> {
@@ -46,7 +70,7 @@ async function scanLsof(
     return [];
   }
   if (process.platform === "win32") {
-    return [];
+    return scanWslLsof(exec);
   }
   try {
     const { stdout, code } = await exec("lsof", ["-iTCP", "-sTCP:LISTEN", "-P", "-n"]);

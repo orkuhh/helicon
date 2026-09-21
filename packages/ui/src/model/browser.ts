@@ -2,6 +2,12 @@ import type { BrowserTabSnapshot } from "../types.js";
 
 export type { BrowserTabSnapshot };
 
+export interface BrowserWorkEntry {
+  verb: string;
+  detail: Record<string, unknown>;
+  at: number;
+}
+
 export interface BrowserSessionState {
   tabs: BrowserTabSnapshot[];
   activeTabId: string | null;
@@ -12,6 +18,9 @@ export interface BrowserSessionState {
   discovered: { url: string; title: string | null }[];
   history: { url: string; title: string | null }[];
   controller: "none" | "human" | "agent";
+  workLog: BrowserWorkEntry[];
+  agentCursor: { x: number; y: number; visible: boolean } | null;
+  pickActive: boolean;
 }
 
 export function emptyBrowserSession(): BrowserSessionState {
@@ -25,5 +34,8 @@ export function emptyBrowserSession(): BrowserSessionState {
     discovered: [],
     history: [],
     controller: "none",
+    workLog: [],
+    agentCursor: null,
+    pickActive: false,
   };
 }

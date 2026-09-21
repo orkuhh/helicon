@@ -19,8 +19,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
-      - run: npm run test --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
+      - run: npm run build --workspace @helicon/browser --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
+      - run: npm run test --workspace @helicon/browser --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
       - run: npm run build --workspace @helicon/web
       - run: npm run test --workspace @helicon/web
 
@@ -44,7 +44,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - run: npm ci
-      - run: npm run build --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
+      - run: npm run build --workspace @helicon/browser --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
       - run: npm run build --workspace @helicon/web
       # tauri-build checks every path in bundle.resources before it compiles anything, and those are
       # built rather than committed. This is what the release does through beforeBuildCommand.

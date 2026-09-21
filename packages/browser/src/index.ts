@@ -5,3 +5,7 @@ export * from "./fakeEngine.js";
 export * from "./portScanner.js";
 export * from "./environmentPort.js";
 export * from "./snapshot.js";
+export * from "./wslHosts.js";
+export * from "./cookieImport.js";
+export * from "./trace.js";
+export { loadPlaywrightEngine } from "./loader.js";

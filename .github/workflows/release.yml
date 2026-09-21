@@ -20,7 +20,7 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
-      - run: npm run build --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
+      - run: npm run build --workspace @helicon/browser --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
       # Pinned to a commit: this step holds the updater signing key, so a moved tag must not change what runs.
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
@@ -60,7 +60,7 @@ jobs:
           # universal-apple-darwin needs both halves installed; aarch64 is already the runner default.
           targets: x86_64-apple-darwin
       - run: npm ci
-      - run: npm run build --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
+      - run: npm run build --workspace @helicon/browser --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
       # Pinned to a commit: this step holds the updater signing key, so a moved tag must not change what runs.
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
@@ -97,7 +97,7 @@ jobs:
       - name: Install Tauri Linux dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev squashfs-tools
       - run: npm ci
-      - run: npm run build --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
+      - run: npm run build --workspace @helicon/browser --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
       # Pinned to a commit: this step holds the updater signing key, so a moved tag must not change what runs.
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:

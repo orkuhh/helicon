@@ -805,6 +805,11 @@ export class HeliconController {
         break;
       }
       case "browser-work":
+        this.patchBrowser(event.sessionId, (b) => ({
+          ...b,
+          workLog: [...b.workLog, { verb: event.verb, detail: event.detail, at: event.at }].slice(-200),
+          controller: event.verb.startsWith("preview_") ? "agent" : b.controller,
+        }));
         break;
       case "sessions-changed":
         this.scheduleRefresh();
@@ -2702,6 +2707,10 @@ export class HeliconController {
   toggleBrowser(open?: boolean): void {
     const next = open ?? !this.state.prefs.browserOpen;
     this.setPrefs({ browserOpen: next, rightSideTab: next ? "browser" : this.state.prefs.rightSideTab });
+  }
+
+  setBrowserMiniPlayer(sessionId: string, open: boolean): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, miniPlayerOpen: open }));
   }
 
   setRightSideTab(tab: "files" | "browser"): void {
