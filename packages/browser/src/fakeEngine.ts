@@ -118,6 +118,14 @@ export function createFakeEngine(options: BrowserEngineOptions): BrowserEngine {
       }
       return t.snapshot;
     },
+    async stopLoading(tabId) {
+      const t = tabs.get(tabId);
+      if (!t) {
+        throw new Error("Tab not found");
+      }
+      t.snapshot = { ...t.snapshot, loading: false };
+      return t.snapshot;
+    },
     async setViewport(tabId, viewport: ViewportState) {
       const t = tabs.get(tabId);
       if (!t) {

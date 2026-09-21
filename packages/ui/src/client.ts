@@ -196,6 +196,13 @@ export interface HeliconClient {
   listBrowserImportSources(): Promise<{ id: string; name: string; available: boolean; reason?: string }[]>;
   importBrowserCookies(filePath: string): Promise<{ imported: number; skipped: number }>;
   submitBrowserPickAnnotation(sessionId: string, tabId: string, payload: Record<string, unknown>): Promise<void>;
+  backBrowserTab(sessionId: string, tabId: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  forwardBrowserTab(sessionId: string, tabId: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  hardReloadBrowserTab(sessionId: string, tabId: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  stopBrowserTab(sessionId: string, tabId: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  setBrowserMuted(sessionId: string, tabId: string, muted: boolean): Promise<import("./types.js").BrowserTabSnapshot>;
+  listBrowserHistory(sessionId: string): Promise<{ url: string; title: string | null }[]>;
+  removeBrowserHistoryEntry(sessionId: string, url: string): Promise<void>;
   /** Subscribe to server events; returns an unsubscribe function. */
   subscribe(handler: EventHandler): () => void;
 }
@@ -207,6 +214,7 @@ export interface BrowserDefaultsView {
   recordingShowMousePresses: boolean;
   grantedPermissions: string[];
   colorScheme: "system" | "light" | "dark";
+  configuredLocalUrls: string[];
 }
 
 /** Parse the title-settings endpoint; malformed answers fall back to on with no model. */

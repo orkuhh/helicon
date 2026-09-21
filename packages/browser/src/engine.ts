@@ -68,6 +68,7 @@ export interface BrowserEngine {
   goBack(tabId: string): Promise<BrowserTabSnapshot>;
   goForward(tabId: string): Promise<BrowserTabSnapshot>;
   reload(tabId: string, hard?: boolean): Promise<BrowserTabSnapshot>;
+  stopLoading(tabId: string): Promise<BrowserTabSnapshot>;
   setViewport(tabId: string, viewport: ViewportState): Promise<BrowserTabSnapshot>;
   setColorScheme(tabId: string, scheme: ColorScheme): Promise<BrowserTabSnapshot>;
   setMuted(tabId: string, muted: boolean): Promise<BrowserTabSnapshot>;
@@ -102,4 +103,6 @@ export interface BrowserEngineOptions {
   onPickComplete?: (tabId: string, payload: Record<string, unknown>) => void;
   recordingShowMousePresses?: boolean;
   recordingShowKeyPresses?: boolean;
+  grantedPermissions?: import("./types.js").BrowserPermission[];
+  onPopupTab?: (parentTabId: string, tab: import("./types.js").BrowserTabSnapshot) => void;
 }

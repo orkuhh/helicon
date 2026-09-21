@@ -106,6 +106,10 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
     } else {
       ctx = await (browser as Browser).newContext({ viewport: null, acceptDownloads: true });
     }
+    const granted = options.grantedPermissions ?? [];
+    if (granted.length > 0) {
+      await ctx.grantPermissions(granted).catch(() => undefined);
+    }
     ctx.on("download", async (download) => {
       const name = download.suggestedFilename();
       const path = join(options.artifactsDir, "downloads", `${randomUUID()}-${name}`);
@@ -158,14 +162,37 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
     tab.cdp = cdp;
   };
 
+  const fetchFaviconDataUrl = async (tab: TabRuntime): Promise<string | null> => {
+    try {
+      const href = (await tab.page.evaluate(
+        `() => {
+          const link = document.querySelector('link[rel~="icon"]');
+          if (link && link.href) return link.href;
+          return location.origin + '/favicon.ico';
+        }`,
+      )) as string;
+      const response = await tab.page.request.get(href);
+      if (!response.ok()) {
+        return null;
+      }
+      const body = await response.body();
+      const ct = response.headers()["content-type"] ?? "image/png";
+      return `data:${ct};base64,${body.toString("base64")}`;
+    } catch {
+      return null;
+    }
+  };
+
   const syncSnapshot = async (tab: TabRuntime): Promise<BrowserTabSnapshot> => {
     const title = await tab.page.title().catch(() => "");
     const url = tab.page.url();
+    const faviconDataUrl = await fetchFaviconDataUrl(tab);
     tab.snapshot = {
       ...tab.snapshot,
       url,
       title,
       loading: false,
+      faviconDataUrl,
     };
     return tab.snapshot;
   };
@@ -273,7 +300,7 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       tabs.set(tabId, runtime);
       page.on("popup", async (popup) => {
         const popupId = `tab_${randomUUID().slice(0, 8)}`;
-        const popupSnap: BrowserTabSnapshot = { ...snap, tabId: popupId, url: popup.url() };
+        const popupSnap: BrowserTabSnapshot = { ...snap, tabId: popupId, url: popup.url(), title: "" };
         tabs.set(popupId, {
           snapshot: popupSnap,
           context: ctx,
@@ -290,6 +317,8 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
           recordingKeyLabel: undefined,
           pickBound: false,
         });
+        options.onPopupTab?.(tabId, popupSnap);
+        void syncSnapshot(tabs.get(popupId)!);
       });
       page.on("crash", () => {
         void recoverCrash(tabId);
@@ -333,8 +362,26 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       if (!tab) {
         throw new Error("Tab not found");
       }
-      await tab.page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
+      await attachDiagnostics(tab);
+      if (hard && tab.cdp) {
+        await tab.cdp.send("Page.reload", { ignoreCache: true });
+        await tab.page.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => undefined);
+      } else {
+        await tab.page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
+      }
       return syncSnapshot(tab);
+    },
+    async stopLoading(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await attachDiagnostics(tab);
+      if (tab.cdp) {
+        await tab.cdp.send("Page.stopLoading").catch(() => undefined);
+      }
+      tab.snapshot = { ...tab.snapshot, loading: false };
+      return tab.snapshot;
     },
     async setViewport(tabId, viewport) {
       const tab = tabs.get(tabId);

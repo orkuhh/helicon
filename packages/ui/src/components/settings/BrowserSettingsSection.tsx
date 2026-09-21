@@ -106,6 +106,21 @@ export function BrowserSettingsSection() {
             />
           </div>
         </Row>
+        <Row label="Pinned local URLs" description="Always probe these URLs for the local-servers list (one per line).">
+          <textarea
+            className="min-h-[72px] w-full rounded border border-line bg-canvas px-2 py-1 font-mono text-xs"
+            value={(defaults?.configuredLocalUrls ?? []).join("\n")}
+            onChange={(e) => {
+              const urls = e.target.value
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .slice(0, 32);
+              void patch({ configuredLocalUrls: urls });
+            }}
+            placeholder="http://localhost:3000"
+          />
+        </Row>
         <Row label="Profile" description="Persistent Chromium profile for cookies and storage.">
           <select
             className="rounded border border-line bg-canvas px-2 py-1 text-sm"

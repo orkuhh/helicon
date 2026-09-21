@@ -43,6 +43,7 @@ export class BrowserHost {
   private readonly automationEpoch = new Map<string, number>();
   private wslHostsLoaded = false;
   private onPickComplete?: (tabId: string, sessionId: string, payload: Record<string, unknown>) => void;
+  private onTabOpened?: (sessionId: string, tab: BrowserTabSnapshot) => void;
 
   constructor(
     private readonly store: HeliconStore,
@@ -84,6 +85,9 @@ export class BrowserHost {
             this.onPickComplete(tabId, sessionId, payload);
           }
         },
+        onPopupTab: (parentTabId, tab) => {
+          void this.registerEngineTab(parentTabId, tab);
+        },
       });
     } else {
       const defaults = this.getDefaults();
@@ -94,11 +98,15 @@ export class BrowserHost {
         wslHosts: this.wslHosts,
         recordingShowKeyPresses: defaults.recordingShowKeyPresses,
         recordingShowMousePresses: defaults.recordingShowMousePresses,
+        grantedPermissions: defaults.grantedPermissions,
         onPickComplete: (tabId, payload) => {
           const sessionId = this.tabSession.get(tabId);
           if (sessionId && this.onPickComplete) {
             this.onPickComplete(tabId, sessionId, payload);
           }
+        },
+        onPopupTab: (parentTabId, tab) => {
+          void this.registerEngineTab(parentTabId, tab);
         },
       });
     }
@@ -112,6 +120,10 @@ export class BrowserHost {
 
   setPickHandler(handler: (tabId: string, sessionId: string, payload: Record<string, unknown>) => void): void {
     this.onPickComplete = handler;
+  }
+
+  setTabOpenedHandler(handler: (sessionId: string, tab: BrowserTabSnapshot) => void): void {
+    this.onTabOpened = handler;
   }
 
   sessionIdForTab(tabId: string): string | null {
@@ -131,13 +143,7 @@ export class BrowserHost {
     return discoverLocalServers({ configuredUrls: configuredUrls ?? defaults.configuredLocalUrls });
   }
 
-  async openTab(sessionId: string, url?: string, profileId?: string): Promise<BrowserTabSnapshot> {
-    const engine = await this.ensureEngine();
-    const defaults = this.getDefaults();
-    const tab = await engine.openTab({
-      url,
-      profileId: profileId ?? defaults.profileId,
-    });
+  private registerTabWithSession(sessionId: string, tab: BrowserTabSnapshot): void {
     let set = this.sessionTabs.get(sessionId);
     if (!set) {
       set = new Set();
@@ -145,7 +151,42 @@ export class BrowserHost {
     }
     set.add(tab.tabId);
     this.tabSession.set(tab.tabId, sessionId);
-    this.store.rememberBrowserTab(sessionId, tab.tabId, tab.url);
+    this.store.rememberBrowserTab(sessionId, tab.tabId, tab.url, tab.profileId);
+  }
+
+  private async registerEngineTab(parentTabId: string, tab: BrowserTabSnapshot): Promise<void> {
+    const sessionId = this.tabSession.get(parentTabId);
+    if (!sessionId) {
+      return;
+    }
+    this.registerTabWithSession(sessionId, tab);
+    this.onTabOpened?.(sessionId, tab);
+  }
+
+  listHistory(sessionId: string): { url: string; title: string | null }[] {
+    const found = this.store.findSession(sessionId);
+    if (!found) {
+      return [];
+    }
+    return this.store.listBrowserHistory(found.cwd).map((row) => ({ url: row.url, title: row.title }));
+  }
+
+  removeHistory(sessionId: string, url: string): void {
+    const found = this.store.findSession(sessionId);
+    if (!found) {
+      return;
+    }
+    this.store.removeBrowserHistory(found.cwd, url);
+  }
+
+  async openTab(sessionId: string, url?: string, profileId?: string): Promise<BrowserTabSnapshot> {
+    const engine = await this.ensureEngine();
+    const defaults = this.getDefaults();
+    const tab = await engine.openTab({
+      url,
+      profileId: profileId ?? defaults.profileId,
+    });
+    this.registerTabWithSession(sessionId, tab);
     if (url) {
       this.store.pushBrowserHistory(sessionId, tab.url, tab.title);
     }

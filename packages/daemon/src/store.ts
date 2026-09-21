@@ -843,6 +843,10 @@ export class HeliconStore {
     }
   }
 
+  removeBrowserHistory(projectCwd: string, url: string): void {
+    this.db.prepare(`DELETE FROM browser_history WHERE project_cwd = ? AND url = ?`).run(projectCwd, url);
+  }
+
   listBrowserHistory(projectCwd: string, limit = 20): { url: string; title: string | null; usedAt: string }[] {
     const rows = this.db
       .prepare(`SELECT url, title, used_at FROM browser_history WHERE project_cwd = ? ORDER BY used_at DESC LIMIT ?`)

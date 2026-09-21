@@ -2762,10 +2762,11 @@ export class HeliconController {
 
   async ensureBrowser(sessionId: string): Promise<void> {
     try {
-      const [tabs, servers, defaults] = await Promise.all([
+      const [tabs, servers, defaults, history] = await Promise.all([
         this.client.listBrowserTabs(sessionId),
         this.client.listDiscoveredServers(),
         this.client.getBrowserDefaults(),
+        this.client.listBrowserHistory(sessionId),
       ]);
       const activeTabId = tabs[0]?.tabId ?? null;
       this.patchBrowser(sessionId, (b) => ({
@@ -2774,6 +2775,7 @@ export class HeliconController {
         activeTabId,
         discovered: servers,
         defaults,
+        history,
         loading: false,
       }));
       if (activeTabId) {
@@ -2853,6 +2855,31 @@ export class HeliconController {
 
   setBrowserPipOpener(opener: (pipUrl: string) => Promise<void>): void {
     this.browserPipOpener = opener;
+  }
+
+  private browserExternalOpener: ((url: string) => Promise<void>) | null = null;
+
+  setBrowserExternalOpener(opener: (url: string) => Promise<void>): void {
+    this.browserExternalOpener = opener;
+  }
+
+  async openBrowserUrlExternally(url: string): Promise<void> {
+    if (this.browserExternalOpener) {
+      await this.browserExternalOpener(url);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  private applyBrowserTab(sessionId: string, tab: import("../types.js").BrowserTabSnapshot): void {
+    this.patchBrowser(sessionId, (b) => ({
+      ...b,
+      tabs: b.tabs.some((t) => t.tabId === tab.tabId)
+        ? b.tabs.map((t) => (t.tabId === tab.tabId ? tab : t))
+        : [...b.tabs, tab],
+      activeTabId: b.activeTabId ?? tab.tabId,
+      loading: tab.loading,
+    }));
   }
 
   dismissBrowserPick(sessionId: string): void {
@@ -2974,6 +3001,39 @@ export class HeliconController {
   async refreshBrowserDownloads(sessionId: string): Promise<void> {
     await this.client.listBrowserDownloads();
     this.patchBrowser(sessionId, (b) => b);
+  }
+
+  async backBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    this.applyBrowserTab(sessionId, await this.client.backBrowserTab(sessionId, tabId));
+  }
+
+  async forwardBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    this.applyBrowserTab(sessionId, await this.client.forwardBrowserTab(sessionId, tabId));
+  }
+
+  async hardReloadBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    this.applyBrowserTab(sessionId, await this.client.hardReloadBrowserTab(sessionId, tabId));
+  }
+
+  async stopBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    this.applyBrowserTab(sessionId, await this.client.stopBrowserTab(sessionId, tabId));
+  }
+
+  async toggleBrowserMute(sessionId: string, tabId: string): Promise<void> {
+    const tab = this.state.browser[sessionId]?.tabs.find((t) => t.tabId === tabId);
+    const muted = !(tab?.muted ?? false);
+    this.applyBrowserTab(sessionId, await this.client.setBrowserMuted(sessionId, tabId, muted));
+  }
+
+  async clearBrowserProfileData(profileId: string, what: "cookies" | "cache"): Promise<void> {
+    await this.client.clearBrowserProfileData(profileId, what);
+    this.toast("info", what === "cookies" ? "Cookies cleared" : "Cache cleared", `Profile ${profileId}`);
+  }
+
+  async removeBrowserHistoryEntry(sessionId: string, url: string): Promise<void> {
+    await this.client.removeBrowserHistoryEntry(sessionId, url);
+    const history = await this.client.listBrowserHistory(sessionId);
+    this.patchBrowser(sessionId, (b) => ({ ...b, history }));
   }
 
   async patchBrowserDefaults(patch: Partial<import("../client.js").BrowserDefaultsView>): Promise<void> {

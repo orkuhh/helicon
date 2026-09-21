@@ -35,6 +35,9 @@ export class BrowserApi {
     this.host.setPickHandler((tabId, sessionId, payload) => {
       void this.emitPick(sessionId, tabId, payload);
     });
+    this.host.setTabOpenedHandler((sessionId, tab) => {
+      this.emitBrowser(sessionId, "browser.opened", { tab });
+    });
   }
 
   private async emitPick(sessionId: string, tabId: string, payload: Record<string, unknown>): Promise<void> {
@@ -155,6 +158,20 @@ const s=new EventSource(u);s.addEventListener('frame',e=>{const d=JSON.parse(e.d
       throw new HttpError(404, "Unknown session.");
     }
 
+    if (rest === "/history" && method === "GET") {
+      this.json(res, 200, { history: this.host.listHistory(sessionId) });
+      return true;
+    }
+    if (rest === "/history" && method === "DELETE") {
+      const body = await readBody();
+      const url = typeof body["url"] === "string" ? body["url"] : "";
+      if (!url) {
+        throw new HttpError(400, "url is required.");
+      }
+      this.host.removeHistory(sessionId, url);
+      this.json(res, 200, { ok: true });
+      return true;
+    }
     if (rest === "/tabs" && method === "GET") {
       const tabs = await this.host.listTabs(sessionId);
       this.json(res, 200, { tabs });
@@ -211,6 +228,11 @@ const s=new EventSource(u);s.addEventListener('frame',e=>{const d=JSON.parse(e.d
     }
     if (action === "/hard-reload" && method === "POST") {
       const tab = await this.host.engineForAutomation().reload(tabId, true);
+      this.json(res, 200, { tab });
+      return true;
+    }
+    if (action === "/stop" && method === "POST") {
+      const tab = await this.host.engineForAutomation().stopLoading(tabId);
       this.json(res, 200, { tab });
       return true;
     }

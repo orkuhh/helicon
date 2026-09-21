@@ -5,9 +5,13 @@ import { IconButton, cn } from "../ui/primitives.js";
 
 export function BrowserMoreMenu(props: {
   tab: BrowserTabSnapshot;
+  profileLabel: string;
   onAppearance: (scheme: BrowserTabSnapshot["colorScheme"]) => void;
   onDevTools: () => void;
   onDownloads: () => void;
+  onHardReload: () => void;
+  onClearCookies: () => void;
+  onClearCache: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -61,6 +65,16 @@ export function BrowserMoreMenu(props: {
             type="button"
             className="flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-hover"
             onClick={() => {
+              props.onHardReload();
+              setOpen(false);
+            }}
+          >
+            Hard reload
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-hover"
+            onClick={() => {
               props.onDevTools();
               setOpen(false);
             }}
@@ -78,6 +92,28 @@ export function BrowserMoreMenu(props: {
           >
             <Download size={14} />
             Downloads
+          </button>
+          <hr className="my-1 border-line" />
+          <div className="px-2 py-1 text-subtle">Clear data ({props.profileLabel})</div>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-hover"
+            onClick={() => {
+              props.onClearCookies();
+              setOpen(false);
+            }}
+          >
+            Clear cookies
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-hover"
+            onClick={() => {
+              props.onClearCache();
+              setOpen(false);
+            }}
+          >
+            Clear cache
           </button>
         </div>
       ) : null}

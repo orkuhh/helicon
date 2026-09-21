@@ -4,6 +4,7 @@ import { HeliconApp } from "@helicon/ui";
 import { Connect } from "./Connect.js";
 import { desktopFrame, titlebarOverlay, bindDesktopZoom } from "./frame.js";
 import { bindDesktopLinks } from "./links.js";
+import { invoke } from "@tauri-apps/api/core";
 import { bindBrowserDesktopShortcuts } from "./browserDesktopShortcuts.js";
 import { openBrowserPip } from "./browserDesktop.js";
 import { appNotifier } from "./notifier.js";
@@ -41,6 +42,13 @@ function Root() {
     <HeliconApp
       client={new WebHeliconClient()}
       openBrowserPip={openBrowserPip}
+      openBrowserExternal={async (url) => {
+        if ("__TAURI_INTERNALS__" in window) {
+          await invoke("plugin:opener|open_url", { url });
+        } else {
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+      }}
       frame={desktopFrame()}
       titlebarOverlay={titlebarOverlay()}
       updater={desktopUpdater()}

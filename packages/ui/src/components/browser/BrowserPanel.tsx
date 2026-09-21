@@ -1,4 +1,20 @@
-import { Camera, Circle, Globe, MousePointer2, PictureInPicture2, Plus, RefreshCw, Video, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Camera,
+  Circle,
+  ExternalLink,
+  Globe,
+  MousePointer2,
+  PictureInPicture2,
+  Plus,
+  RefreshCw,
+  Square,
+  Video,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { shallowEqual, useApp, useController } from "../../app/context.js";
 import { useOverlayDragProps } from "../../app/frame.js";
@@ -6,6 +22,7 @@ import { DEFAULT_BROWSER_WIDTH, BROWSER_WIDTH_MIN, BROWSER_WIDTH_MAX } from "../
 import { Button, IconButton, Spinner, cn } from "../ui/primitives.js";
 import { AgentBrowserCursor } from "./AgentBrowserCursor.js";
 import { BrowserAnnotateDialog } from "./BrowserAnnotateDialog.js";
+import { BrowserContextMenu } from "./BrowserContextMenu.js";
 import { BrowserDeviceToolbar } from "./BrowserDeviceToolbar.js";
 import { BrowserDownloadsPanel } from "./BrowserDownloadsPanel.js";
 import { BrowserMoreMenu } from "./BrowserMoreMenu.js";
@@ -16,6 +33,7 @@ export function BrowserPanel(props: { sessionId: string }) {
   const width = useApp((s) => s.prefs.browserWidth);
   const browser = useApp((s) => s.browser[props.sessionId] ?? null, shallowEqual);
   const [urlDraft, setUrlDraft] = useState("");
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drag = useOverlayDragProps();
 
@@ -67,7 +85,23 @@ export function BrowserPanel(props: { sessionId: string }) {
             )}
             onClick={() => controller.setBrowserTab(props.sessionId, tab.tabId)}
           >
+            {tab.faviconDataUrl ? (
+              <img src={tab.faviconDataUrl} alt="" className="size-3 shrink-0 rounded-sm" />
+            ) : null}
             <span className="truncate">{tab.title || tab.url || "New tab"}</span>
+            {tab.audible || tab.muted ? (
+              <button
+                type="button"
+                className="shrink-0 opacity-70 hover:opacity-100"
+                title={tab.muted ? "Unmute tab" : "Mute tab"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void controller.toggleBrowserMute(props.sessionId, tab.tabId);
+                }}
+              >
+                {tab.muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+              </button>
+            ) : null}
             <X
               size={12}
               className="shrink-0 opacity-60 hover:opacity-100"
@@ -89,11 +123,37 @@ export function BrowserPanel(props: { sessionId: string }) {
         />
       ) : null}
       <div className="flex flex-wrap items-center gap-1 border-b border-line px-2 py-1.5">
+        {active ? (
+          <span className="rounded bg-elevated px-1.5 py-0.5 text-2xs text-muted" title="Profile for this tab">
+            {active.profileId}
+          </span>
+        ) : null}
+        <IconButton label="Back" onClick={() => active && void controller.backBrowserTab(props.sessionId, active.tabId)}>
+          <ArrowLeft size={14} />
+        </IconButton>
+        <IconButton label="Forward" onClick={() => active && void controller.forwardBrowserTab(props.sessionId, active.tabId)}>
+          <ArrowRight size={14} />
+        </IconButton>
         <IconButton
-          label="Reload"
-          onClick={() => active && void controller.reloadBrowserTab(props.sessionId, active.tabId)}
+          label={browser?.loading ? "Stop" : "Reload"}
+          onClick={() => {
+            if (!active) {
+              return;
+            }
+            if (browser?.loading) {
+              void controller.stopBrowserTab(props.sessionId, active.tabId);
+            } else {
+              void controller.reloadBrowserTab(props.sessionId, active.tabId);
+            }
+          }}
         >
-          <RefreshCw size={14} />
+          {browser?.loading ? <Square size={14} /> : <RefreshCw size={14} />}
+        </IconButton>
+        <IconButton
+          label="Open in system browser"
+          onClick={() => active?.url && void controller.openBrowserUrlExternally(active.url)}
+        >
+          <ExternalLink size={14} />
         </IconButton>
         <IconButton
           label="Pick element"
@@ -132,9 +192,13 @@ export function BrowserPanel(props: { sessionId: string }) {
         {active ? (
           <BrowserMoreMenu
             tab={active}
+            profileLabel={active.profileId}
             onAppearance={(scheme) => void controller.setBrowserAppearance(props.sessionId, active.tabId, scheme)}
             onDevTools={() => void controller.openBrowserDevTools(props.sessionId, active.tabId)}
             onDownloads={() => controller.setBrowserDownloadsOpen(props.sessionId, true)}
+            onHardReload={() => void controller.hardReloadBrowserTab(props.sessionId, active.tabId)}
+            onClearCookies={() => void controller.clearBrowserProfileData(active.profileId, "cookies")}
+            onClearCache={() => void controller.clearBrowserProfileData(active.profileId, "cache")}
           />
         ) : null}
         <input
@@ -170,6 +234,7 @@ export function BrowserPanel(props: { sessionId: string }) {
             history={browser?.history ?? []}
             discovered={browser?.discovered ?? []}
             onOpen={(url) => void controller.openBrowserTab(props.sessionId, url)}
+            onRemoveHistory={(url) => void controller.removeBrowserHistoryEntry(props.sessionId, url)}
           />
         ) : (
           <>
@@ -185,8 +250,19 @@ export function BrowserPanel(props: { sessionId: string }) {
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
-                if (active) {
-                  void controller.reloadBrowserTab(props.sessionId, active.tabId);
+                setMenu({ x: e.clientX, y: e.clientY });
+              }}
+            />
+            <BrowserContextMenu
+              open={menu !== null}
+              x={menu?.x ?? 0}
+              y={menu?.y ?? 0}
+              onClose={() => setMenu(null)}
+              onReload={() => active && void controller.reloadBrowserTab(props.sessionId, active.tabId)}
+              onHardReload={() => active && void controller.hardReloadBrowserTab(props.sessionId, active.tabId)}
+              onCopyLink={() => {
+                if (active?.url) {
+                  void navigator.clipboard.writeText(active.url);
                 }
               }}
             />
@@ -215,6 +291,7 @@ function EmptyBrowser(props: {
   history: { url: string; title: string | null }[];
   discovered: { url: string; title: string | null }[];
   onOpen: (url: string) => void;
+  onRemoveHistory: (url: string) => void;
 }) {
   return (
     <div className="flex h-full flex-col gap-4 overflow-auto p-4 text-sm text-muted">
@@ -241,9 +318,12 @@ function EmptyBrowser(props: {
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-subtle">Recently used</h3>
           <ul className="space-y-1">
             {props.history.map((h) => (
-              <li key={h.url}>
-                <button type="button" className="text-left hover:underline" onClick={() => props.onOpen(h.url)}>
+              <li key={h.url} className="flex items-center gap-2">
+                <button type="button" className="min-w-0 flex-1 truncate text-left hover:underline" onClick={() => props.onOpen(h.url)}>
                   {h.title ?? h.url}
+                </button>
+                <button type="button" className="text-subtle hover:text-fg" title="Remove" onClick={() => props.onRemoveHistory(h.url)}>
+                  <X size={12} />
                 </button>
               </li>
             ))}

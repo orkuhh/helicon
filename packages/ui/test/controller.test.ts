@@ -379,8 +379,28 @@ class FakeClient implements HeliconClient {
       recordingShowMousePresses: true,
       grantedPermissions: [],
       colorScheme: "system" as const,
+      configuredLocalUrls: [],
     };
   }
+  async backBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async forwardBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async hardReloadBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async stopBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async setBrowserMuted() {
+    return await this.openBrowserTab();
+  }
+  async listBrowserHistory() {
+    return [];
+  }
+  async removeBrowserHistoryEntry() {}
   async patchBrowserDefaults(patch: Partial<import("../src/client.js").BrowserDefaultsView>) {
     return { ...(await this.getBrowserDefaults()), ...patch };
   }

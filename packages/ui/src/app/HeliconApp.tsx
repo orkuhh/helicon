@@ -38,6 +38,8 @@ export interface HeliconAppProps {
   notifier?: Notifier;
   /** Opens the always-on-top browser PiP window (desktop shell). */
   openBrowserPip?: (pipUrl: string) => Promise<void>;
+  /** Opens the current preview URL in the OS default browser (desktop shell). */
+  openBrowserExternal?: (url: string) => Promise<void>;
 }
 
 /** The whole Helicon interface. Web and desktop shells mount this with their transport. */
@@ -46,6 +48,9 @@ export function HeliconApp(props: HeliconAppProps) {
     const created = new HeliconController(props.client, props.platform);
     if (props.openBrowserPip) {
       created.setBrowserPipOpener(props.openBrowserPip);
+    }
+    if (props.openBrowserExternal) {
+      created.setBrowserExternalOpener(props.openBrowserExternal);
     }
     if (props.updater) {
       created.attachUpdater(props.updater);

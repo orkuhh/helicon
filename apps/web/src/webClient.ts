@@ -568,6 +568,34 @@ export class WebHeliconClient implements HeliconClient {
     await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/pick/complete`, payload);
   }
 
+  async backBrowserTab(sessionId: string, tabId: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/back`, {})).tab;
+  }
+
+  async forwardBrowserTab(sessionId: string, tabId: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/forward`, {})).tab;
+  }
+
+  async hardReloadBrowserTab(sessionId: string, tabId: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/hard-reload`, {})).tab;
+  }
+
+  async stopBrowserTab(sessionId: string, tabId: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/stop`, {})).tab;
+  }
+
+  async setBrowserMuted(sessionId: string, tabId: string, muted: boolean): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/mute`, { muted })).tab;
+  }
+
+  async listBrowserHistory(sessionId: string): Promise<{ url: string; title: string | null }[]> {
+    return (await call<{ history: { url: string; title: string | null }[] }>("GET", `/api/sessions/${enc(sessionId)}/browser/history`)).history;
+  }
+
+  async removeBrowserHistoryEntry(sessionId: string, url: string): Promise<void> {
+    await call("DELETE", `/api/sessions/${enc(sessionId)}/browser/history`, { url });
+  }
+
   /**
    * A server path the browser loads by itself, like an attachment's bytes. It carries no token: the
    * cookie from the handshake is what lets these through, so nothing secret ends up in an `img` tag.
