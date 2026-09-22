@@ -39,7 +39,7 @@ function winGeom() {
   if (!wid) {
     throw new Error("Helicon window not found");
   }
-  sh(`DISPLAY=:1 xdotool windowactivate --sync ${wid}`);
+  sh(`DISPLAY=:1 xdotool windowactivate ${wid}`);
   sh(`DISPLAY=:1 xdotool windowsize ${wid} 1400 900`);
   const raw = sh(`DISPLAY=:1 xdotool getwindowgeometry --shell ${wid}`);
   const geom = {};
@@ -140,7 +140,7 @@ async function paletteTheme(label) {
 }
 
 async function focusHelicon(geom) {
-  sh(`DISPLAY=:1 xdotool windowactivate --sync ${geom.wid}`);
+  sh(`DISPLAY=:1 xdotool windowactivate ${geom.wid}`);
   sh(`DISPLAY=:1 xdotool windowraise ${geom.wid}`);
   sh(`DISPLAY=:1 xdotool windowfocus ${geom.wid}`);
   try {
@@ -164,6 +164,7 @@ async function api(port, path, init = {}) {
   const res = await fetch(`http://127.0.0.1:${port}${path}`, {
     ...init,
     headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+    signal: AbortSignal.timeout(20_000),
   });
   return { status: res.status, json: await res.json().catch(() => null) };
 }
