@@ -2825,25 +2825,37 @@ export class HeliconController {
   }
 
   async openBrowserTab(sessionId: string, url?: string): Promise<void> {
-    const tab = await this.client.openBrowserTab(sessionId, url);
-    this.patchBrowser(sessionId, (b) => ({
-      ...b,
-      tabs: [...b.tabs, tab],
-      activeTabId: tab.tabId,
-    }));
-    this.setPrefs({ browserOpen: true, rightSideTab: "browser" });
-    this.attachBrowserStream(sessionId, tab.tabId);
+    try {
+      const tab = await this.client.openBrowserTab(sessionId, url);
+      this.patchBrowser(sessionId, (b) => ({
+        ...b,
+        tabs: [...b.tabs, tab],
+        activeTabId: tab.tabId,
+      }));
+      this.setPrefs({ browserOpen: true, rightSideTab: "browser" });
+      this.attachBrowserStream(sessionId, tab.tabId);
+    } catch (error) {
+      this.toast("error", "Could not open browser tab", errorMessage(error));
+    }
   }
 
   async navigateBrowser(sessionId: string, tabId: string, url: string): Promise<void> {
     this.patchBrowser(sessionId, (b) => ({ ...b, loading: true }));
-    const tab = await this.client.navigateBrowserTab(sessionId, tabId, url);
-    this.patchBrowser(sessionId, (b) => ({
-      ...b,
-      tabs: b.tabs.map((t) => (t.tabId === tabId ? tab : t)),
-      loading: false,
-      unreachable: tab.failed,
-    }));
+    try {
+      const tab = await this.client.navigateBrowserTab(sessionId, tabId, url);
+      this.patchBrowser(sessionId, (b) => ({
+        ...b,
+        tabs: b.tabs.map((t) => (t.tabId === tabId ? tab : t)),
+        loading: false,
+        unreachable: tab.failed,
+      }));
+      if (tab.failed) {
+        this.toast("error", "Page failed to load", tab.failed);
+      }
+    } catch (error) {
+      this.patchBrowser(sessionId, (b) => ({ ...b, loading: false }));
+      this.toast("error", "Navigation failed", errorMessage(error));
+    }
   }
 
   async reloadBrowserTab(sessionId: string, tabId: string): Promise<void> {

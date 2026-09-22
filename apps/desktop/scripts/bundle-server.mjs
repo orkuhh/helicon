@@ -19,6 +19,11 @@ await esbuild.build({
   format: "cjs",
   outfile: join(resourcesDir, "server.cjs"),
   logLevel: "info",
-  external: ["playwright-core", "chromium-bidi"],
+  external: ["playwright-core"],
 });
+
+const repoRoot = join(appDir, "..", "..");
+const vendorRoot = join(resourcesDir, "node_modules");
+await mkdir(vendorRoot, { recursive: true });
+await cp(join(repoRoot, "node_modules", "playwright-core"), join(vendorRoot, "playwright-core"), { recursive: true });
 console.log("bundled desktop resources into src-tauri/resources");

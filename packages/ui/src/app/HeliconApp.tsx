@@ -89,7 +89,9 @@ function ThemeSync() {
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
-      document.documentElement.dataset["theme"] = theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      const resolved = theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      document.documentElement.setAttribute("data-theme", resolved);
+      document.documentElement.style.colorScheme = resolved;
     };
     apply();
     if (theme !== "system") {

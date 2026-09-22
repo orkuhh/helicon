@@ -80,41 +80,68 @@ export function BrowserPanel(props: { sessionId: string }) {
     >
       <div {...drag} className="flex h-9 shrink-0 items-center gap-1 border-b border-line px-2">
         {browser?.tabs.map((tab) => (
-          <button
+          <div
             key={tab.tabId}
-            type="button"
+            role="tab"
+            tabIndex={0}
+            aria-selected={tab.tabId === active?.tabId}
             className={cn(
-              "flex max-w-[140px] items-center gap-1 rounded px-2 py-1 text-xs",
+              "flex max-w-[140px] cursor-pointer items-center gap-1 rounded px-2 py-1 text-xs",
               tab.tabId === active?.tabId ? "bg-elevated text-fg" : "text-muted hover:bg-elevated/60",
             )}
             onClick={() => controller.setBrowserTab(props.sessionId, tab.tabId)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                controller.setBrowserTab(props.sessionId, tab.tabId);
+              }
+            }}
           >
             {tab.faviconDataUrl ? (
               <img src={tab.faviconDataUrl} alt="" className="size-3 shrink-0 rounded-sm" />
             ) : null}
             <span className="truncate">{tab.title || tab.url || "New tab"}</span>
             {tab.audible || tab.muted ? (
-              <button
-                type="button"
+              <span
+                role="button"
+                tabIndex={0}
                 className="shrink-0 opacity-70 hover:opacity-100"
                 title={tab.muted ? "Unmute tab" : "Mute tab"}
                 onClick={(e) => {
                   e.stopPropagation();
                   void controller.toggleBrowserMute(props.sessionId, tab.tabId);
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void controller.toggleBrowserMute(props.sessionId, tab.tabId);
+                  }
+                }}
               >
                 {tab.muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
-              </button>
+              </span>
             ) : null}
-            <X
-              size={12}
+            <span
+              role="button"
+              tabIndex={0}
               className="shrink-0 opacity-60 hover:opacity-100"
+              aria-label="Close tab"
               onClick={(e) => {
                 e.stopPropagation();
                 void controller.closeBrowserTab(props.sessionId, tab.tabId);
               }}
-            />
-          </button>
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void controller.closeBrowserTab(props.sessionId, tab.tabId);
+                }
+              }}
+            >
+              <X size={12} />
+            </span>
+          </div>
         ))}
         <IconButton label="New browser tab" onClick={() => void controller.openBrowserTab(props.sessionId)}>
           <Plus size={14} />

@@ -21,7 +21,8 @@
           if (prefs.theme === "light" || prefs.theme === "dark") theme = prefs.theme;
           if (typeof prefs.zoom === "number" && isFinite(prefs.zoom)) zoom = prefs.zoom;
         } catch (e) {}
-        document.documentElement.dataset.theme = theme;
+        document.documentElement.setAttribute("data-theme", theme);
+        document.documentElement.style.colorScheme = theme;
         if (zoom !== 1 && !("__TAURI_INTERNALS__" in window)) document.documentElement.style.zoom = String(zoom);
       })();
     </script>

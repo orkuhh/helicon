@@ -378,6 +378,15 @@ fn spawn_server(
     if let Some(path) = augmented_path(node) {
         cmd.env("PATH", path);
     }
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let node_modules = plain_path(&resource_dir.join("node_modules"));
+        if node_modules.is_dir() {
+            cmd.env("NODE_PATH", node_modules);
+        }
+    }
+    if std::env::var_os("HELICON_TEST_MUSE").is_some() {
+        cmd.env("HELICON_TEST_MUSE", "1");
+    }
     cmd.arg(server).arg("--port").arg(port.to_string());
     if let Some(frontend) = frontend {
         cmd.arg("--static").arg(frontend);
