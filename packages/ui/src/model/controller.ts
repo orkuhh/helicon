@@ -440,6 +440,7 @@ export class HeliconController {
       await this.refresh();
       this.update((s) => ({ ...s, boot: "ready" }));
       this.applyRoute(hashToRoute(this.platform.readHash()), false);
+      this.reconcileBrowserRoute();
       void this.discoverAll(true);
       void this.loadModels();
       void this.loadTitleSettings();
@@ -2748,9 +2749,43 @@ export class HeliconController {
 
   // ---------------------------------------------------------------- browser
 
+  private pickRecentSessionId(): string | null {
+    const sessions = Object.values(this.state.sessions)
+      .filter((s) => !s.archived)
+      .sort((a, b) => (a.activityAt < b.activityAt ? 1 : -1));
+    return sessions[0]?.sessionId ?? null;
+  }
+
+  /** Browser panel only renders on a thread route; prefs can outlive the current route after reload. */
+  private reconcileBrowserRoute(): void {
+    if (!this.state.prefs.browserOpen) {
+      return;
+    }
+    let sessionId: string | null = this.state.route.kind === "thread" ? this.state.route.sessionId : null;
+    if (!sessionId) {
+      sessionId = this.pickRecentSessionId();
+      if (sessionId) {
+        this.openThread(sessionId);
+      }
+    }
+    if (sessionId) {
+      void this.ensureBrowser(sessionId);
+    }
+  }
+
   toggleBrowser(open?: boolean): void {
     const next = open ?? !this.state.prefs.browserOpen;
+    let sessionId: string | null = this.state.route.kind === "thread" ? this.state.route.sessionId : null;
+    if (next && !sessionId) {
+      sessionId = this.pickRecentSessionId();
+      if (sessionId) {
+        this.openThread(sessionId);
+      }
+    }
     this.setPrefs({ browserOpen: next, rightSideTab: next ? "browser" : this.state.prefs.rightSideTab });
+    if (next && sessionId) {
+      void this.ensureBrowser(sessionId);
+    }
   }
 
   setBrowserMiniPlayer(sessionId: string, open: boolean): void {
@@ -2763,6 +2798,18 @@ export class HeliconController {
       filesOpen: tab === "files" ? true : this.state.prefs.filesOpen,
       browserOpen: tab === "browser" ? true : this.state.prefs.browserOpen,
     });
+    if (tab === "browser") {
+      let sessionId: string | null = this.state.route.kind === "thread" ? this.state.route.sessionId : null;
+      if (!sessionId) {
+        sessionId = this.pickRecentSessionId();
+        if (sessionId) {
+          this.openThread(sessionId);
+        }
+      }
+      if (sessionId) {
+        void this.ensureBrowser(sessionId);
+      }
+    }
   }
 
   setBrowserWidth(width: number): void {
@@ -2784,10 +2831,16 @@ export class HeliconController {
         this.client.getBrowserDefaults(),
         this.client.listBrowserHistory(sessionId),
       ]);
-      const activeTabId = tabs[0]?.tabId ?? null;
+      let resolvedTabs = tabs;
+      let activeTabId = tabs[0]?.tabId ?? null;
+      if (resolvedTabs.length === 0) {
+        const created = await this.client.openBrowserTab(sessionId);
+        resolvedTabs = [created];
+        activeTabId = created.tabId;
+      }
       this.patchBrowser(sessionId, (b) => ({
         ...b,
-        tabs,
+        tabs: resolvedTabs,
         activeTabId,
         discovered: servers,
         defaults,
@@ -2800,6 +2853,20 @@ export class HeliconController {
     } catch (error) {
       this.toast("error", "Browser unavailable", errorMessage(error));
     }
+  }
+
+  async submitBrowserUrl(sessionId: string, url: string): Promise<void> {
+    const trimmed = url.trim();
+    if (!trimmed) {
+      return;
+    }
+    const state = this.state.browser[sessionId];
+    const tabId = state?.activeTabId ?? state?.tabs[0]?.tabId ?? null;
+    if (!tabId) {
+      await this.openBrowserTab(sessionId, trimmed);
+      return;
+    }
+    await this.navigateBrowser(sessionId, tabId, trimmed);
   }
 
   private frameSources = new Map<string, EventSource>();

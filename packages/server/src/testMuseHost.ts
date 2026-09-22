@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { HostFactory } from "./server.js";
 
 class FakeConnection {
@@ -19,7 +20,9 @@ class FakeConnection {
 }
 
 const connection = new FakeConnection();
-connection.replies.set("session/start", { session: { sessionId: "desktop-test", modelId: "muse-spark-1.3" } });
+connection.replies.set("session/start", () => ({
+  session: { sessionId: `s_${randomUUID().slice(0, 8)}`, modelId: "muse-spark-1.3" },
+}));
 
 export const testMuseHostFactory: HostFactory = () => ({
   start: async () => {

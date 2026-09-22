@@ -386,6 +386,7 @@ fn spawn_server(
     }
     if std::env::var_os("HELICON_TEST_MUSE").is_some() {
         cmd.env("HELICON_TEST_MUSE", "1");
+        cmd.env("HELICON_BROWSER_SKIP_DEVTOOLS_OPEN", "1");
     }
     cmd.arg(server).arg("--port").arg(port.to_string());
     if let Some(frontend) = frontend {

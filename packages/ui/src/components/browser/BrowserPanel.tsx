@@ -239,8 +239,8 @@ export function BrowserPanel(props: { sessionId: string }) {
           value={urlDraft || active?.url || ""}
           onChange={(e) => setUrlDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && active) {
-              void controller.navigateBrowser(props.sessionId, active.tabId, urlDraft || active.url);
+            if (e.key === "Enter") {
+              void controller.submitBrowserUrl(props.sessionId, urlDraft || active?.url || "");
               setUrlDraft("");
             }
           }}
@@ -248,7 +248,7 @@ export function BrowserPanel(props: { sessionId: string }) {
         />
         <Button
           size="sm"
-          onClick={() => active && void controller.navigateBrowser(props.sessionId, active.tabId, urlDraft || active.url)}
+          onClick={() => void controller.submitBrowserUrl(props.sessionId, urlDraft || active?.url || "")}
         >
           Go
         </Button>

@@ -83,6 +83,13 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
   const debugPort = options.debugPort ?? 9333;
   const contextDebugPorts = new Map<string, number>();
 
+  const chromiumArgs = (debuggingPort: number): string[] => [
+    `--remote-debugging-port=${debuggingPort}`,
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+  ];
+
   const ensureBrowser = async (): Promise<Browser> => {
     if (browser) {
       return browser;
@@ -90,7 +97,7 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
     browser = await chromium.launch({
       headless: true,
       channel: undefined,
-      args: [`--remote-debugging-port=${debugPort}`],
+      args: chromiumArgs(debugPort),
       downloadsPath: join(options.artifactsDir, "downloads"),
     });
     return browser;
@@ -112,7 +119,7 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
         headless: true,
         viewport: null,
         acceptDownloads: true,
-        args: [`--remote-debugging-port=${ctxPort}`],
+        args: chromiumArgs(ctxPort),
       });
       contextDebugPorts.set(key, ctxPort);
     } else {
@@ -149,6 +156,7 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
       return;
     }
     const cdp = await tab.page.context().newCDPSession(tab.page);
+    await cdp.send("Page.enable");
     await cdp.send("Runtime.enable");
     await cdp.send("Network.enable");
     await cdp.send("Log.enable");
@@ -725,20 +733,64 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
         return () => set?.delete(onFrame);
       }
       let active = true;
+      const emitFrame = (jpegBase64: string): void => {
+        const payload: FramePayload = {
+          tabId,
+          dataUrl: `data:image/jpeg;base64,${jpegBase64}`,
+          width: tab.snapshot.viewport.width,
+          height: tab.snapshot.viewport.height,
+          at: Date.now(),
+        };
+        for (const fn of set ?? []) {
+          fn(payload);
+        }
+      };
+
+      const pushScreenshotFrame = async (): Promise<boolean> => {
+        try {
+          const buf = await tab.page.screenshot({ type: "jpeg", quality: 60 });
+          emitFrame(buf.toString("base64"));
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
       void attachDiagnostics(tab).then(async () => {
+        await pushScreenshotFrame();
         if (!tab.cdp) {
+          const poll = async (): Promise<void> => {
+            while (active && (set?.size ?? 0) > 0) {
+              if (!(await pushScreenshotFrame())) {
+                break;
+              }
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+          };
+          void poll();
           return;
         }
         if (!tab.screencastStarted) {
           tab.screencastStarted = true;
+          let screencastFrames = 0;
           try {
             await tab.cdp.send("Page.startScreencast", { format: "jpeg", quality: 60, everyNthFrame: 2 });
           } catch (error) {
             if (!(error instanceof Error) || !/Screencast is already active/i.test(error.message)) {
-              throw error;
+              const poll = async (): Promise<void> => {
+                while (active && (set?.size ?? 0) > 0) {
+                  if (!(await pushScreenshotFrame())) {
+                    break;
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 500));
+                }
+              };
+              void poll();
+              return;
             }
           }
           tab.cdp.on("Page.screencastFrame", async (frame) => {
+          screencastFrames += 1;
           if (!active) {
             return;
           }
@@ -753,18 +805,22 @@ export async function createPlaywrightEngine(options: BrowserEngineOptions): Pro
               tab.recordingFrames.shift();
             }
           }
-          const payload: FramePayload = {
-            tabId,
-            dataUrl: `data:image/jpeg;base64,${frame.data}`,
-            width: tab.snapshot.viewport.width,
-            height: tab.snapshot.viewport.height,
-            at: Date.now(),
-          };
-          for (const fn of set ?? []) {
-            fn(payload);
-          }
+          emitFrame(frame.data);
           await tab.cdp?.send("Page.screencastFrameAck", { sessionId: frame.sessionId });
           });
+          setTimeout(() => {
+            if (active && screencastFrames === 0 && (set?.size ?? 0) > 0) {
+              const poll = async (): Promise<void> => {
+                while (active && (set?.size ?? 0) > 0) {
+                  if (!(await pushScreenshotFrame())) {
+                    break;
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 500));
+                }
+              };
+              void poll();
+            }
+          }, 1500);
         }
       });
       return () => {
