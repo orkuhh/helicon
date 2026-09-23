@@ -1,8 +1,9 @@
-import { Check, ChevronDown, FolderPlus, RefreshCw } from "lucide-react";
+import { ArrowsClockwiseIcon, CaretDownIcon, CheckIcon, FolderPlusIcon } from "../ui/icons";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useApp, useController, useNow } from "../../app/context";
 import { relativeTime, shortenPath } from "../../model/format";
-import type { ProjectView } from "../../types";
+import { planView } from "../../model/plan";
+import type { AccountView, PlanUsage, PlanUsageByAccount, ProjectView } from "../../types";
 import { TopBar } from "../chrome";
 import { Composer, ComposerFooter } from "../composer/Composer";
 import { CopyButton } from "../ui/Markdown";
@@ -16,6 +17,9 @@ export function NewThread(props: { cwd: string | null }) {
   const controller = useController();
   const projects = useApp((s) => s.projects);
   const sessions = useApp((s) => s.sessions);
+  const accounts = useApp((s) => s.accounts);
+  const planUsage = useApp((s) => s.planUsage);
+  const planUsageByAccount = useApp((s) => s.planUsageByAccount);
   const now = useNow(60_000);
   const project = projects.find((p) => p.cwd === props.cwd) ?? projects[0] ?? null;
   const recent = useMemo(
@@ -27,6 +31,10 @@ export function NewThread(props: { cwd: string | null }) {
             .slice(0, 5)
         : [],
     [sessions, project],
+  );
+  const nearCap = useMemo(
+    () => (project ? nearCapHint(project, accounts, planUsage, planUsageByAccount, now) : null),
+    [project, accounts, planUsage, planUsageByAccount, now],
   );
   if (!project) {
     return <Welcome />;
@@ -43,6 +51,7 @@ export function NewThread(props: { cwd: string | null }) {
             <Composer sessionId={null} cwd={project.cwd} running={false} readOnly={false} variant="home" autoFocus />
           </div>
           <ComposerFooter cwd={project.cwd} branch={null} running={false} />
+          {nearCap ? <p className="mt-2 text-xs text-muted">{nearCap}</p> : null}
           {recent.length > 0 ? (
             <section className="mt-12" aria-label={`Recent threads in ${project.displayName}`}>
               <h2 className="px-2 text-xs font-medium text-subtle">Recent in {project.displayName}</h2>
@@ -68,6 +77,52 @@ export function NewThread(props: { cwd: string | null }) {
   );
 }
 
+/**
+ * The manual version of "switch accounts before this one caps out": one line that says which account is close to
+ * its rolling-window cap and which has more room, so the choice stays with the person, never automatic. Needs at
+ * least two accounts with usage (the default login counts as one), the project's default account (or the default login, when unset) at 80% or more,
+ * and another account at least 25 points behind it.
+ */
+function nearCapHint(
+  project: ProjectView,
+  accounts: AccountView[] | null,
+  planUsage: PlanUsage | null,
+  planUsageByAccount: PlanUsageByAccount,
+  now: number,
+): string | null {
+  if (!accounts || accounts.length < 1) {
+    return null;
+  }
+  const candidates: { id: string | null; name: string; percent: number }[] = [];
+  const loginPercent = planView(planUsage, now)?.rows[0]?.percent;
+  if (loginPercent !== undefined) {
+    candidates.push({ id: null, name: "Default login", percent: loginPercent });
+  }
+  for (const account of accounts) {
+    const percent = planView(planUsageByAccount[account.id], now)?.rows[0]?.percent;
+    if (percent !== undefined) {
+      candidates.push({ id: account.id, name: account.name, percent });
+    }
+  }
+  // The default login counts as a switchable account, so one named profile plus a busy default login is enough.
+  if (candidates.length < 2) {
+    return null;
+  }
+  const high = candidates.find((c) => c.id === project.defaultAccountId);
+  if (!high || high.percent < 80) {
+    return null;
+  }
+  const rest = candidates.filter((c) => c.id !== high.id);
+  if (rest.length === 0) {
+    return null;
+  }
+  const low = rest.reduce((min, c) => (c.percent < min.percent ? c : min), rest[0]);
+  if (high.percent - low.percent < 25) {
+    return null;
+  }
+  return `${high.name} is at ${high.percent}%. ${low.name} has more room, at ${low.percent}%.`;
+}
+
 function ProjectSwitcher(props: { project: ProjectView; projects: ProjectView[] }) {
   const controller = useController();
   return (
@@ -78,7 +133,7 @@ function ProjectSwitcher(props: { project: ProjectView; projects: ProjectView[] 
           className="inline-flex items-baseline gap-1 rounded-md text-accent-text underline decoration-dotted decoration-[1.5px] underline-offset-[7px] outline-offset-4 transition-colors hover:decoration-solid data-[state=open]:decoration-solid"
         >
           {props.project.displayName}
-          <ChevronDown size={22} strokeWidth={1.75} className="translate-y-[3px] self-center" aria-hidden="true" />
+          <CaretDownIcon weight="regular" size={22} className="translate-y-[3px] self-center" aria-hidden="true" />
         </button>
       </MenuTrigger>
       <MenuContent className="w-[320px]">
@@ -97,7 +152,7 @@ function ProjectSwitcher(props: { project: ProjectView; projects: ProjectView[] 
           ))}
         </MenuRadioGroup>
         <MenuSeparator />
-        <MenuItem icon={<FolderPlus size={14} />} onSelect={() => controller.setAddProjectOpen(true)}>
+        <MenuItem icon={<FolderPlusIcon size={14} />} onSelect={() => controller.setAddProjectOpen(true)}>
           Add project
         </MenuItem>
       </MenuContent>
@@ -226,7 +281,7 @@ export function Onboarding() {
                 )}
                 aria-label={step.ok === true ? "Done" : step.ok === false ? "Needs attention" : "Check yourself"}
               >
-                {step.ok === true ? <Check size={13} strokeWidth={3} /> : index + 1}
+                {step.ok === true ? <CheckIcon size={13} /> : index + 1}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-fg">{step.title}</p>
@@ -243,7 +298,7 @@ export function Onboarding() {
         </ol>
         <div className="mt-6">
           <Button variant="primary" onClick={() => controller.retryBoot()} loading={checking}>
-            <RefreshCw size={14} /> Check again
+            <ArrowsClockwiseIcon size={14} /> Check again
           </Button>
         </div>
       </div>
@@ -275,7 +330,7 @@ export function BootError() {
         <p className="mt-3 text-sm break-words text-muted">{message ?? "The local Helicon server did not answer."}</p>
         <div className="mt-6">
           <Button variant="primary" onClick={() => controller.retryBoot()}>
-            <RefreshCw size={14} /> Try again
+            <ArrowsClockwiseIcon size={14} /> Try again
           </Button>
         </div>
       </div>

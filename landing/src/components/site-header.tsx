@@ -12,6 +12,7 @@ import { REPO_URL } from "@/lib/site";
 import type { PageCopy } from "@/lib/copy";
 import { GitHubLogo } from "./os-logos";
 import { MobileNav } from "./mobile-nav";
+import { SiteSearch } from "./seo/site-search";
 import { ThemeToggle } from "./theme-toggle";
 import { Logo, Rule, buttonClass } from "./ui";
 import { TrackedLink } from "./tracked-link";
@@ -63,20 +64,21 @@ export function SiteHeader({
           <span className="hidden font-headline text-[18px] font-semibold min-[420px]:inline">Helicon</span>
         </a>
 
-        <nav aria-label="Primary" className="ml-6 hidden items-center gap-1 lg:flex">
+        <nav aria-label="Primary" className="ml-6 hidden items-center gap-1 lg:flex max-xl:ml-2 max-xl:gap-0">
           {nav.map(({ href, label, icon: Icon }) => (
             <a
               key={href}
               href={href}
-              className="flex h-9 items-center gap-2 rounded-lg px-3 text-[14px] font-medium text-muted transition-colors hover:bg-sunken hover:text-fg"
+              className="flex h-9 items-center gap-2 rounded-lg px-3 text-[14px] font-medium whitespace-nowrap text-muted transition-colors hover:bg-sunken hover:text-fg max-xl:px-2.5"
             >
-              <Icon aria-hidden="true" className="size-4 text-subtle" />
+              <Icon aria-hidden="true" className="size-4 text-subtle max-xl:hidden" />
               {label}
             </a>
           ))}
         </nav>
 
         <div className="ml-auto flex items-center gap-1.5">
+          <SiteSearch />
           <ThemeToggle className="max-sm:hidden" />
           <TrackedLink
             href={REPO_URL}

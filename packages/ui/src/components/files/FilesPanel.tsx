@@ -1,22 +1,4 @@
-import {
-  ChevronRight,
-  Code,
-  ExternalLink,
-  Eye,
-  File,
-  FileCode,
-  FileImage,
-  FileText,
-  FileType,
-  FileVideo,
-  FileAudio,
-  Folder,
-  FolderOpen,
-  ListTree,
-  RefreshCw,
-  Search,
-  X,
-} from "lucide-react";
+import { ArrowSquareOutIcon, ArrowsClockwiseIcon, CaretRightIcon, CodeIcon, EyeIcon, FileAudioIcon, FileCodeIcon, FileIcon, FileImageIcon, FileTextIcon, FileTxtIcon, FileVideoIcon, FolderIcon, FolderOpenIcon, MagnifyingGlassIcon, TreeViewIcon, XIcon } from "../ui/icons.js";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { shallowEqual, useApp, useController } from "../../app/context.js";
 import { useOverlayDragProps } from "../../app/frame.js";
@@ -35,21 +17,21 @@ const HIGHLIGHT_LIMIT = 300_000;
 function iconFor(name: string): ReactNode {
   const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
   if (isMarkdownPath(name) || ext === "txt") {
-    return <FileText size={14} />;
+    return <FileTextIcon size={14} />;
   }
   if (["png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "ico", "bmp"].includes(ext)) {
-    return <FileImage size={14} />;
+    return <FileImageIcon size={14} />;
   }
   if (["mp4", "webm", "mov", "m4v", "ogv"].includes(ext)) {
-    return <FileVideo size={14} />;
+    return <FileVideoIcon size={14} />;
   }
   if (["mp3", "wav", "ogg", "m4a", "flac"].includes(ext)) {
-    return <FileAudio size={14} />;
+    return <FileAudioIcon size={14} />;
   }
   if (ext === "pdf") {
-    return <FileType size={14} />;
+    return <FileTxtIcon size={14} />;
   }
-  return languageFromPath(name) ? <FileCode size={14} /> : <File size={14} />;
+  return languageFromPath(name) ? <FileCodeIcon size={14} /> : <FileIcon size={14} />;
 }
 
 /** The file viewer beside a thread: open files as tabs, or the project's tree to find one. */
@@ -86,7 +68,7 @@ export function FilesPanel(props: { sessionId: string; cwd: string }) {
             onClick={() => controller.showFileTree(props.sessionId, !showTree)}
             {...noDrag}
           >
-            <ListTree size={15} />
+            <TreeViewIcon size={15} />
           </IconButton>
         </Tip>
         <div role="tablist" aria-label="Open files" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" {...noDrag}>
@@ -119,7 +101,7 @@ export function FilesPanel(props: { sessionId: string; cwd: string }) {
                   className="flex size-5 shrink-0 items-center justify-center rounded text-subtle hover:bg-hover hover:text-fg"
                 >
                   {dirty ? <span className="size-1.5 rounded-full bg-accent group-hover/tab:hidden" /> : null}
-                  <X size={12} className={cn(dirty && "hidden group-hover/tab:block")} />
+                  <XIcon size={12} className={cn(dirty && "hidden group-hover/tab:block")} />
                 </button>
               </div>
             );
@@ -127,7 +109,7 @@ export function FilesPanel(props: { sessionId: string; cwd: string }) {
         </div>
         <Tip label="Close files">
           <IconButton label="Close files" onClick={() => controller.toggleFiles(false)} {...noDrag}>
-            <X size={15} />
+            <XIcon size={15} />
           </IconButton>
         </Tip>
       </header>
@@ -219,7 +201,7 @@ function FileTree(props: { sessionId: string; cwd: string }) {
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-1.5 border-b border-line px-2 py-1.5">
         <label className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md bg-sunken px-2 text-sm shadow-[0_0_0_1px_var(--border)] focus-within:shadow-[0_0_0_1px_var(--accent)]">
-          {searching ? <Spinner size={12} className="shrink-0" /> : <Search size={13} className="shrink-0 text-subtle" />}
+          {searching ? <Spinner size={12} className="shrink-0" /> : <MagnifyingGlassIcon size={13} className="shrink-0 text-subtle" />}
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -237,7 +219,7 @@ function FileTree(props: { sessionId: string; cwd: string }) {
         </label>
         <Tip label="Refresh">
           <IconButton size="sm" label="Refresh files" onClick={() => setReload((n) => n + 1)}>
-            <RefreshCw size={13} />
+            <ArrowsClockwiseIcon size={13} />
           </IconButton>
         </Tip>
       </div>
@@ -326,7 +308,7 @@ function TreeFolder(props: { sessionId: string; cwd: string; path: string; depth
 function TreeDir(props: { sessionId: string; cwd: string; entry: FileEntry; depth: number }) {
   const controller = useController();
   const open = useApp((s) => (s.fileTreeOpen[props.cwd] ?? []).includes(props.entry.path));
-  const Icon = open ? FolderOpen : Folder;
+  const Icon = open ? FolderOpenIcon : FolderIcon;
   return (
     <div role="treeitem" aria-expanded={open}>
       <button
@@ -338,7 +320,7 @@ function TreeDir(props: { sessionId: string; cwd: string; entry: FileEntry; dept
         )}
         style={{ paddingLeft: `${props.depth * 12 + 4}px` }}
       >
-        <ChevronRight size={12} className={cn("shrink-0 text-subtle transition-transform duration-150", open && "rotate-90")} />
+        <CaretRightIcon size={12} className={cn("shrink-0 text-subtle transition-transform duration-150", open && "rotate-90")} />
         <Icon size={14} className="shrink-0 text-subtle" />
         <span className="truncate">{props.entry.name}</span>
       </button>
@@ -443,17 +425,17 @@ function FileView(props: { sessionId: string; cwd: string; path: string; line: L
         {editable ? (
           <div role="radiogroup" aria-label="View" className="flex items-center rounded-md bg-sunken p-0.5">
             <ModeButton label="Preview" active={!source} onClick={() => setSource(false)}>
-              <Eye size={13} />
+              <EyeIcon size={13} />
             </ModeButton>
             <ModeButton label="Source" active={source} onClick={() => setSource(true)}>
-              <Code size={13} />
+              <CodeIcon size={13} />
             </ModeButton>
           </div>
         ) : null}
         {file && file.kind !== "text" && file.kind !== "markdown" ? (
           <Tip label="Open in the default app">
             <IconButton size="sm" label="Open in the default app" onClick={() => void controller.openFileExternally(props.cwd, props.path)}>
-              <ExternalLink size={13} />
+              <ArrowSquareOutIcon size={13} />
             </IconButton>
           </Tip>
         ) : null}
@@ -518,7 +500,7 @@ function FileProblem(props: { title: string; detail: string; onRetry?: () => voi
       <p className="max-w-[46ch] text-xs text-pretty text-muted">{props.detail}</p>
       {props.onRetry ? (
         <Button size="sm" variant="ghost" onClick={props.onRetry}>
-          <RefreshCw size={13} /> Try again
+          <ArrowsClockwiseIcon size={13} /> Try again
         </Button>
       ) : null}
     </div>
@@ -571,7 +553,7 @@ function FileBody(props: {
     case "audio":
       return (
         <div className="flex min-h-full flex-col items-center justify-center gap-3 p-6">
-          <FileAudio size={28} className="text-subtle" />
+          <FileAudioIcon size={28} className="text-subtle" />
           <audio src={url} controls preload="metadata" className="w-full max-w-md" />
         </div>
       );

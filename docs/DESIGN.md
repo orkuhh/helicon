@@ -72,5 +72,5 @@ Borrowed from open-source registries (all MIT) and adapted to these tokens; each
 | First-run folder illustration | [Rare UI](https://rareui.com) |
 | Menus, dialogs, tooltips, popovers | [Radix UI](https://www.radix-ui.com) |
 | Command palette | [cmdk](https://cmdk.paco.me) |
-| Icons | [Lucide](https://lucide.dev) |
+| Icons | [Phosphor](https://phosphoricons.com), bold weight, all imported through `packages/ui/src/components/ui/icons.ts` |
 | Scroll anchoring | [use-stick-to-bottom](https://github.com/stackblitz-labs/use-stick-to-bottom) |

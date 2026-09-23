@@ -1,4 +1,4 @@
-import { Gauge } from "lucide-react";
+import { GaugeIcon } from "../ui/icons.js";
 import { useEffect, useMemo } from "react";
 import { useApp, useController, useNow } from "../../app/context.js";
 import { relativeTime } from "../../model/format.js";
@@ -40,7 +40,7 @@ export function PlanMeter() {
     return (
       <section aria-label="Plan usage" className="rounded-2xl bg-raised px-4 py-3.5 shadow-card">
         <div className="flex items-center gap-2 text-sm font-medium text-fg">
-          <Gauge size={15} className="text-subtle" /> Plan usage
+          <GaugeIcon size={15} className="text-subtle" /> Plan usage
         </div>
         <p className="mt-1 text-xs text-pretty text-muted">
           Muse reports your plan's allowance with each model call. Send a prompt in any thread and it shows up here.
@@ -48,11 +48,17 @@ export function PlanMeter() {
       </section>
     );
   }
+  return <MeterCard view={view} title="Plan usage" now={now} />;
+}
+
+/** The loaded-state meter card: a tier chip, the rolling window and weekly rows, and when Muse last reported them. */
+function MeterCard(props: { view: PlanView; title: string; now: number }) {
+  const { view, title, now } = props;
   return (
-    <section aria-label="Plan usage" className="rounded-2xl bg-raised px-4 py-3.5 shadow-card">
+    <section aria-label={title} className="rounded-2xl bg-raised px-4 py-3.5 shadow-card">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <Gauge size={15} className="shrink-0 text-subtle" />
-        <h2 className="text-sm font-medium text-fg">Plan usage</h2>
+        <GaugeIcon size={15} className="shrink-0 text-subtle" />
+        <h2 className="text-sm font-medium text-fg">{title}</h2>
         {view.tier ? <span className="rounded-md bg-active px-1.5 py-px text-2xs font-medium text-muted">{view.tier}</span> : null}
         <span className="flex-1" />
         <span className={cn("text-2xs", view.stale ? "text-warn-text" : "text-subtle")}>{updatedLabel(view, now)}</span>
@@ -89,6 +95,28 @@ export function PlanMeter() {
 }
 
 /**
+ * One meter per switchable account that has reported plan usage. Sits below the default `PlanMeter` on the usage
+ * page; renders nothing when there is nothing per-account to show, so a single-account setup looks unchanged.
+ */
+export function AccountMeters() {
+  const accounts = useApp((s) => s.accounts);
+  const byAccount = useApp((s) => s.planUsageByAccount);
+  const withUsage = (accounts ?? []).filter((account) => byAccount[account.id]);
+  const now = useNow(60_000, withUsage.length > 0);
+  if (withUsage.length === 0) {
+    return null;
+  }
+  return (
+    <div className="mb-6 grid gap-3 @min-[720px]:grid-cols-2">
+      {withUsage.map((account) => {
+        const view = planView(byAccount[account.id], now);
+        return view ? <MeterCard key={account.id} view={view} title={account.name} now={now} /> : null;
+      })}
+    </div>
+  );
+}
+
+/**
  * Muse reports these numbers with a model call and at no other time, so the reading is always a point in the past.
  * The age therefore sits beside each percentage as well as here, and this line says where the numbers come from.
  */
@@ -117,7 +145,7 @@ export function PlanPill() {
           TEXT[first.tone],
         )}
       >
-        <Gauge size={12} />
+        <GaugeIcon size={12} />
         {first.percent}%
       </button>
     </Tip>

@@ -451,6 +451,12 @@ export class DemoClient implements HeliconClient {
   async renameAccount() {}
   async removeAccount() {}
   async setProjectDefaultAccount() {}
+  async accountsHealth() {
+    return { metaApiKeyInherited: false };
+  }
+  async loginAccount() {
+    return { fallback: "In-app login is not available in the demo." };
+  }
 
   async usage(days?: number): Promise<UsageReport> {
     return usageReport(this.now, [...this.sessions.values()].map((s) => s.summary), days ?? 30);

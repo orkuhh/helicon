@@ -1,22 +1,6 @@
 import { mayAutoFocus } from "@/demo/portal";
 import { usePortalContainer } from "@/demo/portal";
-import {
-  ArrowUp,
-  Brain,
-  ChevronDown,
-  CircleHelp,
-  Cpu,
-  Folder,
-  GitBranch,
-  Lock,
-  Minimize2,
-  Shield,
-  ShieldAlert,
-  ShieldQuestion,
-  Square,
-  SquareTerminal,
-  Zap,
-} from "lucide-react";
+import { ArrowUpIcon, ArrowsInIcon, BrainIcon, CaretDownIcon, CpuIcon, FolderIcon, GitBranchIcon, LightningIcon, LockIcon, QuestionIcon, ShieldChevronIcon, ShieldIcon, ShieldWarningIcon, SquareIcon, TerminalWindowIcon, UserIcon } from "../ui/icons";
 import {
   forwardRef,
   useCallback,
@@ -409,7 +393,7 @@ export function Composer(props: ComposerProps) {
       </label>
       {shell ? (
         <div className="flex items-center gap-1.5 px-4 pt-2.5 text-xs text-muted">
-          <SquareTerminal size={13} className="shrink-0" />
+          <TerminalWindowIcon size={13} className="shrink-0" />
           <span className="truncate">
             Helicon runs this{props.cwd ? ` in ${basename(props.cwd)}` : ""}; the output stays here until you send it to Muse
           </span>
@@ -451,6 +435,7 @@ export function Composer(props: ComposerProps) {
         <ModelPicker sessionId={props.sessionId} side={props.variant === "home" ? "bottom" : "top"} />
         <EffortPicker side={props.variant === "home" ? "bottom" : "top"} />
         <AccessPicker sessionId={props.sessionId} side={props.variant === "home" ? "bottom" : "top"} />
+        <AccountPicker sessionId={props.sessionId} cwd={props.cwd} variant={props.variant} />
         <span className="min-w-2 flex-1" />
         {props.sessionId ? <SpeedReadout sessionId={props.sessionId} /> : null}
         {props.sessionId ? <CostMeter sessionId={props.sessionId} /> : null}
@@ -458,7 +443,7 @@ export function Composer(props: ComposerProps) {
         {props.running && props.sessionId && hasText ? (
           <Tip label="Stop the turn" shortcut={["Esc"]}>
             <IconButton size="md" label="Stop the turn" disabled={stopping} onClick={() => void controller.stop(props.sessionId as string)}>
-              <Square size={11} className="fill-current" />
+              <SquareIcon weight="fill" size={11} />
             </IconButton>
           </Tip>
         ) : null}
@@ -477,9 +462,9 @@ export function Composer(props: ComposerProps) {
               {starting || stopping ? (
                 <Spinner size={13} />
               ) : showStop ? (
-                <Square size={11} className="fill-current" />
+                <SquareIcon weight="fill" size={11} />
               ) : (
-                <ArrowUp size={16} strokeWidth={2.25} />
+                <ArrowUpIcon size={16} />
               )}
             </SwapIcon>
           </button>
@@ -506,7 +491,7 @@ const ToolbarTrigger = forwardRef<
     >
       <span className="shrink-0">{icon}</span>
       <span className="flex min-w-0 items-center truncate">{label}</span>
-      <ChevronDown size={12} className="shrink-0 opacity-60" />
+      <CaretDownIcon size={12} className="shrink-0 opacity-60" />
     </button>
   );
 });
@@ -536,7 +521,7 @@ function ModelPicker(props: { sessionId: string | null; side: PickerSide }) {
       <MenuTrigger asChild>
         <ToolbarTrigger
           aria-label={`Model: ${modelDisplayName(current)}`}
-          icon={<Cpu size={13} />}
+          icon={<CpuIcon size={13} />}
           label={
             <>
               <span className="truncate">{modelDisplayName(current)}</span>
@@ -572,6 +557,41 @@ function ModelPicker(props: { sessionId: string | null; side: PickerSide }) {
             ))}
           </MenuRadioGroup>
         )}
+      </MenuContent>
+    </Menu>
+  );
+}
+
+/**
+ * Sets the project's default account for new threads (`startThread` reads `project.defaultAccountId`); no
+ * transient state of its own. Shows only on the new-thread composer, and only once accounts exist. On an
+ * existing thread the account is fixed at spawn and shown by the sidebar badge instead.
+ */
+function AccountPicker(props: { sessionId: string | null; cwd: string | null; variant: "thread" | "home" }) {
+  const controller = useController();
+  const accounts = useApp((s) => s.accounts);
+  const open = useApp((s) => s.picker === "account");
+  const current = useApp((s) => s.projects.find((p) => p.cwd === props.cwd)?.defaultAccountId ?? null);
+  if (props.sessionId !== null || !props.cwd || !(accounts && accounts.length > 0)) {
+    return null;
+  }
+  const label = accounts.find((a) => a.id === current)?.name ?? "Default login";
+  return (
+    <Menu open={open} onOpenChange={(next) => (next ? controller.setPicker("account") : controller.closePicker("account"))}>
+      <MenuTrigger asChild>
+        <ToolbarTrigger aria-label={`Account: ${label}`} icon={<UserIcon size={13} />} label={<span className="truncate">{label}</span>} />
+      </MenuTrigger>
+      <MenuContent side={props.variant === "home" ? "bottom" : "top"} className="w-[300px]">
+        <MenuLabel>Account</MenuLabel>
+        <MenuRadioGroup
+          value={current ?? ""}
+          onValueChange={(value) => void controller.setProjectDefaultAccount(props.cwd as string, value || null)}
+        >
+          <MenuOption value="" label="Default login" />
+          {accounts.map((a) => (
+            <MenuOption key={a.id} value={a.id} label={a.name} description={a.hasLogin ? (a.email ?? "Signed in") : "Not signed in"} />
+          ))}
+        </MenuRadioGroup>
       </MenuContent>
     </Menu>
   );
@@ -615,7 +635,7 @@ function EffortPicker(props: { side: PickerSide }) {
   return (
     <Popover.Root open={open} onOpenChange={(next) => (next ? controller.setPicker("effort") : controller.closePicker("effort"))}>
       <Popover.Trigger asChild>
-        <ToolbarTrigger aria-label={`Reasoning effort: ${label}`} icon={<Brain size={13} />} label={label} />
+        <ToolbarTrigger aria-label={`Reasoning effort: ${label}`} icon={<BrainIcon size={13} />} label={label} />
       </Popover.Trigger>
       <Popover.Portal container={usePortalContainer()}>
         <Popover.Content
@@ -639,7 +659,7 @@ function EffortPicker(props: { side: PickerSide }) {
                 aria-label="What effort does"
                 className="-m-1 rounded-full p-1 text-subtle transition-colors duration-100 hover:text-fg"
               >
-                <CircleHelp size={15} />
+                <QuestionIcon size={15} />
               </button>
             </Tip>
           </div>
@@ -706,24 +726,24 @@ function EffortPicker(props: { side: PickerSide }) {
 }
 
 export const MODES: { value: ApprovalMode; label: string; description: string; icon: ReactNode }[] = [
-  { value: "onRequest", label: "Ask first", description: "Muse asks before anything that needs approval.", icon: <Shield size={14} /> },
+  { value: "onRequest", label: "Ask first", description: "Muse asks before anything that needs approval.", icon: <ShieldIcon size={14} /> },
   {
     value: "promptUnmatched",
     label: "Ask for unlisted",
     description: "Commands your rules allow just run; anything else asks.",
-    icon: <ShieldQuestion size={14} />,
+    icon: <ShieldChevronIcon size={14} />,
   },
   {
     value: "denyUnmatched",
     label: "Deny unlisted",
     description: "Commands your rules allow just run; anything else is refused.",
-    icon: <Lock size={14} />,
+    icon: <LockIcon size={14} />,
   },
   {
     value: "allowAll",
     label: "Full access",
     description: "Every tool runs without asking. Only for sandboxes.",
-    icon: <ShieldAlert size={14} />,
+    icon: <ShieldWarningIcon size={14} />,
   },
 ];
 
@@ -750,7 +770,7 @@ function AccessPicker(props: { sessionId: string | null; side: PickerSide }) {
         <MenuTrigger asChild>
           <ToolbarTrigger
             aria-label={yolo ? "Permissions: YOLO mode" : `Permissions: ${mode?.label}`}
-            icon={yolo ? <Zap size={14} /> : mode?.icon}
+            icon={yolo ? <LightningIcon size={14} /> : mode?.icon}
             label={yolo ? "YOLO" : mode?.label}
             tone={yolo || current === "allowAll" || bypass ? "warn" : undefined}
           />
@@ -761,7 +781,7 @@ function AccessPicker(props: { sessionId: string | null; side: PickerSide }) {
           <div className="flex items-start gap-3 px-2 pt-1 pb-2.5">
             <label htmlFor={yoloId} className="min-w-0 flex-1 cursor-default">
               <span className="flex items-center gap-1.5 text-sm text-fg">
-                <Zap size={14} className="text-warn-text" aria-hidden="true" />
+                <LightningIcon size={14} className="text-warn-text" aria-hidden="true" />
                 YOLO mode
               </span>
               <span className="block text-xs text-muted">Nothing asks, new threads run unsandboxed. Restarts Muse hosts.</span>
@@ -924,14 +944,14 @@ export function ComposerFooter(props: { cwd: string | null; branch: string | nul
       {props.cwd ? (
         <Tip label={props.cwd} side="top" align="start">
           <span className="flex min-w-0 items-center gap-1.5" tabIndex={0}>
-            <Folder size={12} className="shrink-0" />
+            <FolderIcon size={12} className="shrink-0" />
             <span className="truncate">{basename(props.cwd)}</span>
           </span>
         </Tip>
       ) : null}
       {props.branch ? (
         <span className="flex min-w-0 items-center gap-1.5">
-          <GitBranch size={12} className="shrink-0" />
+          <GitBranchIcon size={12} className="shrink-0" />
           <span className="truncate font-mono text-2xs">{props.branch}</span>
         </span>
       ) : null}

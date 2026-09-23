@@ -1,4 +1,4 @@
-import { Database, Gauge } from "lucide-react";
+import { DatabaseIcon, GaugeIcon } from "../ui/icons.js";
 import { Popover } from "radix-ui";
 import { useMemo, useState, type ReactNode } from "react";
 import { useApp } from "../../app/context.js";
@@ -35,7 +35,7 @@ export function TelemetryPills(props: { sessionId: string }) {
   return (
     <div className="flex items-center justify-center gap-1.5">
       <Pill
-        icon={<Gauge size={12} />}
+        icon={<GaugeIcon size={12} />}
         open={open === "time"}
         onOpenChange={(next) => setOpen(next ? "time" : null)}
         label={timePillLabel(telemetry)}
@@ -45,7 +45,7 @@ export function TelemetryPills(props: { sessionId: string }) {
         <TimingPanel telemetry={telemetry} />
       </Pill>
       <Pill
-        icon={<Database size={12} />}
+        icon={<DatabaseIcon size={12} />}
         open={open === "usage"}
         onOpenChange={(next) => setOpen(next ? "usage" : null)}
         label={usagePillLabel(telemetry)}

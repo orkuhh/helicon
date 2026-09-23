@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { XIcon } from "../ui/icons.js";
 import { useController } from "../../app/context.js";
 import { IconButton } from "../ui/primitives.js";
 
@@ -9,7 +9,7 @@ export function ThreadPreviewMiniPlayer(props: { sessionId: string; frameDataUrl
       <div className="flex h-8 items-center justify-between border-b border-line px-2 text-xs text-muted">
         <span>Browser preview</span>
         <IconButton label="Close mini player" onClick={() => controller.setBrowserMiniPlayer(props.sessionId, false)}>
-          <X size={14} />
+          <XIcon size={14} />
         </IconButton>
       </div>
       <div className="aspect-video bg-canvas">

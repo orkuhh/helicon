@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ArrowUpRight } from "@phosphor-icons/react/ssr";
+import { ArrowUpRight, Rss } from "@phosphor-icons/react/ssr";
 import { AnswerBlock, Breadcrumbs, PageCta } from "@/components/seo/doc-page";
 import { DocShell } from "@/components/seo/doc-shell";
 import { IconTile } from "@/components/seo/icons";
@@ -22,7 +22,13 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   keywords: ["helicon changelog", "helicon releases", "muse code gui updates", "muse code desktop app version"],
-  alternates: { canonical: "/changelog" },
+  alternates: {
+    canonical: "/changelog",
+    types: {
+      "application/rss+xml": [{ url: "/rss.xml", title: "Helicon releases (RSS)" }],
+      "application/atom+xml": [{ url: "/atom.xml", title: "Helicon releases (Atom)" }],
+    },
+  },
   openGraph: { type: "website", url: "/changelog", siteName: SITE_NAME, title: TITLE, description: DESCRIPTION, images: [image] },
   twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [image] },
 };
@@ -147,6 +153,19 @@ export default async function Page() {
           {H1}
         </h1>
         <AnswerBlock>{ANSWER}</AnswerBlock>
+        <p className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13.5px] text-subtle">
+          <Rss aria-hidden="true" className="size-4 text-accent-text" />
+          Subscribe:
+          <a href="/rss.xml" className="underline decoration-line-strong underline-offset-4 hover:text-fg">
+            RSS
+          </a>
+          <a href="/atom.xml" className="underline decoration-line-strong underline-offset-4 hover:text-fg">
+            Atom
+          </a>
+          <a href="/changelog.md" className="underline decoration-line-strong underline-offset-4 hover:text-fg">
+            Markdown
+          </a>
+        </p>
 
         {releases.length === 0 ? (
           <p className="mt-10 text-[15.5px] text-muted">

@@ -1,38 +1,4 @@
-import {
-  Archive,
-  ArrowDownToLine,
-  Check,
-  ChevronRight,
-  Code,
-  Copy,
-  Download,
-  Ellipsis,
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  GitBranch,
-  Layers,
-  ListFilter,
-  Monitor,
-  Moon,
-  PanelLeftClose,
-  Pause,
-  Pencil,
-  Pin,
-  PinOff,
-  Play,
-  RefreshCw,
-  RotateCw,
-  ChartColumn,
-  Search,
-  Settings,
-  ShieldOff,
-  SquarePen,
-  Sun,
-  Target,
-  Undo2,
-  X,
-} from "lucide-react";
+import { ArchiveIcon, ArrowClockwiseIcon, ArrowLineDownIcon, ArrowUUpLeftIcon, ArrowsClockwiseIcon, CaretRightIcon, ChartBarIcon, CheckIcon, CodeIcon, CopyIcon, DotsThreeIcon, DownloadSimpleIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, FunnelSimpleIcon, GearSixIcon, GitBranchIcon, MagnifyingGlassIcon, MonitorIcon, MoonIcon, NotePencilIcon, PauseIcon, PencilSimpleIcon, PlayIcon, PushPinIcon, PushPinSlashIcon, ShieldSlashIcon, SidebarSimpleIcon, StackIcon, SunIcon, TargetIcon, XIcon } from "../ui/icons.js";
 import { memo, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { shallowEqual, useApp, useController, useNow } from "../../app/context.js";
 import { useOverlayDragProps, useTitlebarOverlay } from "../../app/frame.js";
@@ -117,18 +83,18 @@ function SidebarTop() {
         <span className="flex-1" />
         <Tip label="Hide sidebar" shortcut={[MOD, "B"]}>
           <IconButton label="Hide sidebar" onClick={() => controller.toggleSidebar()}>
-            <PanelLeftClose size={16} />
+            <SidebarSimpleIcon size={16} />
           </IconButton>
         </Tip>
       </div>
       <NavRow
-        icon={<SquarePen size={15} />}
+        icon={<NotePencilIcon size={15} />}
         label="New thread"
         keys={[MOD, "Shift", "O"]}
         active={routeKind === "new"}
         onClick={() => controller.newThread()}
       />
-      <NavRow icon={<Search size={15} />} label="Search" keys={[MOD, "K"]} onClick={() => controller.setPaletteOpen(true)} />
+      <NavRow icon={<MagnifyingGlassIcon size={15} />} label="Search" keys={[MOD, "K"]} onClick={() => controller.setPaletteOpen(true)} />
     </div>
   );
 }
@@ -210,7 +176,7 @@ function ThreadList() {
           <GroupByMenu />
           <Tip label="Add project">
             <IconButton size="xs" label="Add project" onClick={() => controller.setAddProjectOpen(true)}>
-              <FolderPlus size={14} />
+              <FolderPlusIcon size={14} />
             </IconButton>
           </Tip>
         </div>
@@ -366,17 +332,17 @@ const ProjectSection = memo(function ProjectSection(props: {
           className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-1.5 text-left"
           title={project.cwd}
         >
-          <ChevronRight
+          <CaretRightIcon
             size={13}
             className={cn("shrink-0 text-subtle transition-transform duration-150 ease-out", !props.collapsed && "rotate-90")}
           />
           {props.collapsed ? (
-            <Folder size={15} className="shrink-0 text-subtle" />
+            <FolderIcon size={15} className="shrink-0 text-subtle" />
           ) : (
-            <FolderOpen size={15} className="shrink-0 text-subtle" />
+            <FolderOpenIcon size={15} className="shrink-0 text-subtle" />
           )}
           <span className="truncate text-sm font-medium text-fg">{project.displayName}</span>
-          {project.pinned ? <Pin size={11} className="shrink-0 text-subtle" aria-label="Pinned" /> : null}
+          {project.pinned ? <PushPinIcon size={11} className="shrink-0 text-subtle" aria-label="Pinned" /> : null}
           {props.collapsed && props.group.attention > 0 ? (
             <span className="mr-1 ml-auto size-1.5 shrink-0 rounded-full bg-warn" aria-label={`${props.group.attention} need you`} />
           ) : props.collapsed && props.group.running > 0 ? (
@@ -389,7 +355,7 @@ const ProjectSection = memo(function ProjectSection(props: {
         >
           <Tip label={`New thread in ${project.displayName}`}>
             <IconButton size="xs" label={`New thread in ${project.displayName}`} onClick={() => controller.newThread(project.cwd)}>
-              <SquarePen size={13} />
+              <NotePencilIcon size={13} />
             </IconButton>
           </Tip>
           <ProjectMenu project={project} />
@@ -489,7 +455,7 @@ function SettledShelf(props: { shelfKey: string; entries: SidebarEntry[]; active
         <span>Settled</span>
         <span className="tabular-nums">{props.entries.length}</span>
         <span aria-hidden="true" className="h-px flex-1 bg-line" />
-        <ChevronRight size={12} className={cn("shrink-0 transition-transform duration-150 ease-out", open && "rotate-90")} />
+        <CaretRightIcon size={12} className={cn("shrink-0 transition-transform duration-150 ease-out", open && "rotate-90")} />
       </button>
       {visible.length > 0 ? (
         <ul className="flex flex-col gap-px">
@@ -553,7 +519,7 @@ function RowStatus(props: { entry: SidebarEntry; now: number; settled?: boolean 
     case "unread":
       return (
         <span className="flex items-center gap-1 font-medium text-ok-text">
-          <Check size={11} strokeWidth={2.5} aria-hidden="true" />
+          <CheckIcon size={11} aria-hidden="true" />
           Done
         </span>
       );
@@ -586,17 +552,30 @@ function RowMeta(props: { session: SessionSummary; showProject?: boolean }) {
           )}
           title={`Goal: ${goal.objective}`}
         >
-          <Target size={11} className="shrink-0" aria-hidden="true" />
+          <TargetIcon size={11} className="shrink-0" aria-hidden="true" />
           <span className="sr-only">Goal </span>
           {Math.round(Math.max(0, Math.min(100, goal.percentComplete)))}%
         </span>
       ) : null}
       {branch ? (
         <span className="flex min-w-0 items-center gap-1">
-          <GitBranch size={11} className="shrink-0" aria-hidden="true" />
+          <GitBranchIcon size={11} className="shrink-0" aria-hidden="true" />
           <span className="truncate font-mono text-2xs">{branch}</span>
         </span>
       ) : null}
+    </span>
+  );
+}
+
+function AccountBadge({ accountId }: { accountId: string | null }) {
+  const account = useApp((s) => s.accounts?.find((a) => a.id === accountId) ?? null);
+  if (!accountId || !account) return null;
+  return (
+    <span
+      title={`Account: ${account.name}`}
+      className="max-w-[7rem] shrink-0 truncate rounded bg-active px-1 py-px text-2xs font-medium text-muted"
+    >
+      {account.name}
     </span>
   );
 }
@@ -648,13 +627,14 @@ export const ThreadRow = memo(
               >
                 {session.sandboxDisabled === true ? (
                   <span title="Sandbox off" className="flex shrink-0 text-warn-text">
-                    <ShieldOff size={12} aria-hidden="true" />
+                    <ShieldSlashIcon size={12} aria-hidden="true" />
                   </span>
                 ) : null}
+                <AccountBadge accountId={session.accountId} />
                 <span className="min-w-0 flex-1 truncate">{session.title}</span>
               </span>
               {props.settled ? null : <RowMeta session={session} showProject={props.showProject} />}
-              <span className="sr-only">{`, ${STATUS_LABEL[status]}${session.sandboxDisabled === true ? ", sandbox off" : ""}`}</span>
+              <span className="sr-only">{`, ${STATUS_LABEL[status]}${session.sandboxDisabled === true ? ", sandbox off" : ""}${session.accountId ? ", using a separate account" : ""}`}</span>
             </button>
           )}
           {renaming ? null : (
@@ -670,13 +650,13 @@ export const ThreadRow = memo(
                 {props.settled ? (
                   <Tip label="Un-settle">
                     <IconButton size="xs" label="Un-settle thread" onClick={() => void controller.setSettled(session.sessionId, false)}>
-                      <Undo2 size={13} />
+                      <ArrowUUpLeftIcon size={13} />
                     </IconButton>
                   </Tip>
                 ) : isLive(status) ? null : (
                   <Tip label="Settle">
                     <IconButton size="xs" label="Settle thread" onClick={() => void controller.setSettled(session.sessionId, true)}>
-                      <Check size={14} />
+                      <CheckIcon size={14} />
                     </IconButton>
                   </Tip>
                 )}
@@ -730,21 +710,21 @@ function ThreadMenu(props: { session: SessionSummary; onRename: () => void }) {
     <Menu>
       <MenuTrigger asChild>
         <IconButton size="xs" label="Thread actions">
-          <Ellipsis size={14} />
+          <DotsThreeIcon size={14} />
         </IconButton>
       </MenuTrigger>
       <MenuContent align="end">
-        <MenuItem icon={<Pencil size={14} />} onSelect={props.onRename}>
+        <MenuItem icon={<PencilSimpleIcon size={14} />} onSelect={props.onRename}>
           Rename
         </MenuItem>
-        <MenuItem icon={<Copy size={14} />} onSelect={() => void navigator.clipboard?.writeText(props.session.sessionId)}>
+        <MenuItem icon={<CopyIcon size={14} />} onSelect={() => void navigator.clipboard?.writeText(props.session.sessionId)}>
           Copy session ID
         </MenuItem>
-        <MenuItem icon={<FolderOpen size={14} />} onSelect={() => void controller.openFolder(props.session.cwd, "files")}>
+        <MenuItem icon={<FolderOpenIcon size={14} />} onSelect={() => void controller.openFolder(props.session.cwd, "files")}>
           {revealLabel()}
         </MenuItem>
         <MenuSeparator />
-        <MenuItem icon={<Archive size={14} />} onSelect={() => void controller.archive(props.session.sessionId)}>
+        <MenuItem icon={<ArchiveIcon size={14} />} onSelect={() => void controller.archive(props.session.sessionId)}>
           Archive thread
         </MenuItem>
       </MenuContent>
@@ -766,34 +746,34 @@ function ProjectMenu(props: { project: ProjectView }) {
     <Menu>
       <MenuTrigger asChild>
         <IconButton size="xs" label={`${project.displayName} actions`}>
-          <Ellipsis size={14} />
+          <DotsThreeIcon size={14} />
         </IconButton>
       </MenuTrigger>
       <MenuContent align="end">
-        <MenuItem icon={<SquarePen size={14} />} onSelect={() => controller.newThread(project.cwd)}>
+        <MenuItem icon={<NotePencilIcon size={14} />} onSelect={() => controller.newThread(project.cwd)}>
           New thread
         </MenuItem>
         <MenuItem
-          icon={project.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+          icon={project.pinned ? <PushPinSlashIcon size={14} /> : <PushPinIcon size={14} />}
           onSelect={() => void controller.togglePin(project.cwd)}
         >
           {project.pinned ? "Unpin" : "Pin to top"}
         </MenuItem>
         <MenuSeparator />
-        <MenuItem icon={<FolderOpen size={14} />} onSelect={() => void controller.openFolder(project.cwd, "files")}>
+        <MenuItem icon={<FolderOpenIcon size={14} />} onSelect={() => void controller.openFolder(project.cwd, "files")}>
           {revealLabel()}
         </MenuItem>
-        <MenuItem icon={<Code size={14} />} onSelect={() => void controller.openFolder(project.cwd, "editor")}>
+        <MenuItem icon={<CodeIcon size={14} />} onSelect={() => void controller.openFolder(project.cwd, "editor")}>
           Open in VS Code
         </MenuItem>
-        <MenuItem icon={<Copy size={14} />} onSelect={() => void navigator.clipboard?.writeText(project.cwd)}>
+        <MenuItem icon={<CopyIcon size={14} />} onSelect={() => void navigator.clipboard?.writeText(project.cwd)}>
           Copy path
         </MenuItem>
-        <MenuItem icon={<RefreshCw size={14} />} onSelect={() => void controller.refreshProject(project.cwd)}>
+        <MenuItem icon={<ArrowsClockwiseIcon size={14} />} onSelect={() => void controller.refreshProject(project.cwd)}>
           Refresh threads
         </MenuItem>
         <MenuSeparator />
-        <MenuItem icon={<X size={14} />} tone="danger" onSelect={() => void controller.hideProject(project.cwd)}>
+        <MenuItem icon={<XIcon size={14} />} tone="danger" onSelect={() => void controller.hideProject(project.cwd)}>
           Remove from sidebar
         </MenuItem>
       </MenuContent>
@@ -809,14 +789,14 @@ function GroupByMenu() {
       <Tip label="Group threads">
         <MenuTrigger asChild>
           <IconButton size="xs" label="Group threads">
-            <ListFilter size={14} />
+            <FunnelSimpleIcon size={14} />
           </IconButton>
         </MenuTrigger>
       </Tip>
       <MenuContent align="end">
         <MenuRadioGroup value={groupBy} onValueChange={(v) => controller.setGroupBy(v === "status" ? "status" : "project")}>
-          <MenuOption value="project" icon={<Folder size={14} />} label="By project" description="Each project with its threads" />
-          <MenuOption value="status" icon={<Layers size={14} />} label="By status" description="Needs you, working, ready for review" />
+          <MenuOption value="project" icon={<FolderIcon size={14} />} label="By project" description="Each project with its threads" />
+          <MenuOption value="status" icon={<StackIcon size={14} />} label="By status" description="Needs you, working, ready for review" />
         </MenuRadioGroup>
       </MenuContent>
     </Menu>
@@ -848,18 +828,18 @@ function SidebarFooter() {
       </Tip>
       <Tip label="Refresh threads from Muse" side="top">
         <IconButton label="Refresh threads from Muse" onClick={() => void controller.discoverAll()} disabled={discovering}>
-          <RefreshCw size={14} className={cn(discovering && "animate-spin")} />
+          <ArrowsClockwiseIcon size={14} className={cn(discovering && "animate-spin")} />
         </IconButton>
       </Tip>
       <PlanPill />
       <Tip label="Usage and cost" side="top">
         <IconButton label="Usage and cost" onClick={() => controller.navigate({ kind: "usage" })}>
-          <ChartColumn size={14} />
+          <ChartBarIcon size={14} />
         </IconButton>
       </Tip>
       <Tip label="Settings" side="top">
         <IconButton label="Settings" onClick={() => controller.navigate({ kind: "settings" })}>
-          <Settings size={14} />
+          <GearSixIcon size={14} />
         </IconButton>
       </Tip>
       <UpdatesMenu />
@@ -911,7 +891,7 @@ function UpdatesMenu() {
       <Tip label={status === "ready" ? `Helicon ${version} is ready to install` : waiting ? `Helicon ${version} is available` : "Updates"} side="top">
         <MenuTrigger asChild>
           <IconButton label="Updates" className="relative">
-            <Download size={15} />
+            <DownloadSimpleIcon size={15} />
             {waiting ? (
               <span
                 aria-hidden="true"
@@ -934,16 +914,16 @@ function UpdatesMenu() {
         </div>
         <MenuSeparator />
         {status === "ready" ? (
-          <MenuItem icon={<RotateCw size={14} />} onSelect={() => controller.restartToUpdate()}>
+          <MenuItem icon={<ArrowClockwiseIcon size={14} />} onSelect={() => controller.restartToUpdate()}>
             Restart to update
           </MenuItem>
         ) : null}
         {status === "available" ? (
-          <MenuItem icon={<ArrowDownToLine size={14} />} onSelect={() => controller.downloadUpdate()}>
+          <MenuItem icon={<ArrowLineDownIcon size={14} />} onSelect={() => controller.downloadUpdate()}>
             Download version {version}
           </MenuItem>
         ) : null}
-        <MenuItem icon={<RefreshCw size={14} />} disabled={busy} onSelect={() => controller.checkForUpdates()}>
+        <MenuItem icon={<ArrowsClockwiseIcon size={14} />} disabled={busy} onSelect={() => controller.checkForUpdates()}>
           Check for updates
         </MenuItem>
         <MenuSeparator />
@@ -954,7 +934,7 @@ function UpdatesMenu() {
         >
           Automatic updates
         </MenuCheck>
-        <MenuItem icon={paused ? <Play size={14} /> : <Pause size={14} />} onSelect={() => controller.setUpdatesPaused(!paused)}>
+        <MenuItem icon={paused ? <PlayIcon size={14} /> : <PauseIcon size={14} />} onSelect={() => controller.setUpdatesPaused(!paused)}>
           {paused ? "Resume updates" : "Pause updates"}
         </MenuItem>
       </MenuContent>
@@ -975,7 +955,7 @@ function ThemeMenu() {
   const controller = useController();
   const theme = useApp((s) => s.prefs.theme);
   const codeTheme = useApp((s) => s.prefs.codeTheme);
-  const icon = theme === "light" ? <Sun size={15} /> : theme === "dark" ? <Moon size={15} /> : <Monitor size={15} />;
+  const icon = theme === "light" ? <SunIcon size={15} /> : theme === "dark" ? <MoonIcon size={15} /> : <MonitorIcon size={15} />;
   return (
     <Menu>
       <Tip label="Theme" side="top">
@@ -985,9 +965,9 @@ function ThemeMenu() {
       </Tip>
       <MenuContent side="top" align="end" className="min-w-[160px]">
         <MenuRadioGroup value={theme} onValueChange={(v) => controller.setTheme(v === "light" || v === "dark" ? v : "system")}>
-          <MenuOption value="system" icon={<Monitor size={14} />} label="System" />
-          <MenuOption value="light" icon={<Sun size={14} />} label="Light" />
-          <MenuOption value="dark" icon={<Moon size={14} />} label="Dark" />
+          <MenuOption value="system" icon={<MonitorIcon size={14} />} label="System" />
+          <MenuOption value="light" icon={<SunIcon size={14} />} label="Light" />
+          <MenuOption value="dark" icon={<MoonIcon size={14} />} label="Dark" />
         </MenuRadioGroup>
         <MenuSeparator />
         <p className="px-2.5 pt-1 pb-1.5 text-2xs font-medium text-subtle">Code</p>
@@ -1074,7 +1054,7 @@ function SidebarEmpty() {
         onClick={() => controller.setAddProjectOpen(true)}
         className="mt-3 inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-accent-text hover:bg-hover"
       >
-        <FolderPlus size={14} /> Add project
+        <FolderPlusIcon size={14} /> Add project
       </button>
       {discovering ? (
         <p className="mt-3 flex items-center gap-2 text-xs text-subtle">

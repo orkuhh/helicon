@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { extname, join, normalize, posix, resolve, sep, win32 } from "node:path";
+import type { Readable } from "node:stream";
 import {
   HeliconMspHost,
   HeliconStore,
@@ -43,13 +44,13 @@ import {
 import { FileError, listFolder, readProjectFile, resolveInRoot, searchProjectFiles, serveProjectFile, writeProjectFile } from "./files.js";
 import { PathError, createDirectory, listDirectory, resolveUserPath, type PathContext } from "./paths.js";
 import { buildThreadTitlePrompt, deriveTitle, parseExecTitle, sanitizeThreadTitle } from "./threadTitles.js";
-import { AoniaError, createAonia, type Aonia } from "@harjjotsinghh/aonia";
+import { AoniaError, createAonia, parseLoginOutput, type Aonia, type Profile } from "@harjjotsinghh/aonia";
 import { HttpError } from "./httpError.js";
 import { BrowserApi } from "./browserApi.js";
 import { previewToolAllowed } from "./browserApproval.js";
 import { PreviewMcpToolkit, PREVIEW_TOOL_NAMES } from "./mcpPreview.js";
 
-export const HELICON_VERSION = "0.15.0";
+export const HELICON_VERSION = "0.17.0";
 
 export interface HostExit {
   code: number | null;
@@ -81,6 +82,25 @@ export type OpenTarget = "files" | "editor";
 export type Opener = (path: string, target: OpenTarget) => Promise<void>;
 
 const realHostFactory: HostFactory = (target) => new HeliconMspHost(target);
+
+/** The shape of a spawned `muse login` child the route needs: readable output and a way to kill it. */
+export interface LoginChild {
+  stdout: Readable;
+  stderr: Readable;
+  on(event: "close" | "error", listener: (arg: unknown) => void): void;
+  kill(): void;
+}
+
+/** Spawns `muse login` for a profile. `env` is the profile's overlay; the real impl spreads it over `process.env`. */
+export type LoginSpawn = (command: string, args: string[], opts: { env: Record<string, string> }) => LoginChild;
+
+const defaultLoginSpawn: LoginSpawn = (command, args, opts) =>
+  spawn(command, args, {
+    cwd: homedir(),
+    env: { ...process.env, ...opts.env },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  }) as unknown as LoginChild;
 
 /** Runs a `!` command where the workspace is, and hands back what it printed. */
 export type ShellRunner = (
@@ -117,6 +137,8 @@ export interface ServerOptions {
   shellRunner?: ShellRunner;
   /** Use in-memory fake browser engine (tests). */
   browserUseFakeEngine?: boolean;
+  /** Spawns `muse login` for the device-code route; a thin wrapper over `node:child_process` spawn by default. */
+  loginSpawn?: LoginSpawn;
 }
 
 interface ManagedHost {
@@ -194,6 +216,7 @@ const TITLE_BACKFILL_LIMIT = 30;
 const ENV_CACHE_MS = 30_000;
 const CLONE_TIMEOUT_MS = 10 * 60_000;
 const AUTO_SETTLE_SWEEP_MS = 60_000;
+const LOGIN_TIMEOUT_MS = 30_000;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
@@ -656,7 +679,17 @@ export class HeliconServer {
   private readonly options: Required<
     Omit<
       ServerOptions,
-      "staticDir" | "token" | "platform" | "distro" | "musePath" | "hostFactory" | "opener" | "exec" | "findNativeMuse" | "aonia"
+      | "staticDir"
+      | "token"
+      | "platform"
+      | "distro"
+      | "musePath"
+      | "hostFactory"
+      | "opener"
+      | "exec"
+      | "findNativeMuse"
+      | "aonia"
+      | "loginSpawn"
     >
   > &
     Pick<ServerOptions, "staticDir" | "token" | "findNativeMuse"> & {
@@ -665,7 +698,10 @@ export class HeliconServer {
       musePath?: string | null;
       hostFactory: HostFactory;
       exec: ExecFn;
+      loginSpawn: LoginSpawn;
     };
+  /** `muse login` children in flight, keyed by account id; a reopened modal kills and replaces the old one. */
+  private readonly loginChildren = new Map<string, LoginChild>();
 
   constructor(options: ServerOptions = {}) {
     this.options = {
@@ -686,6 +722,7 @@ export class HeliconServer {
       exec: options.exec ?? defaultExec,
       shellRunner: options.shellRunner ?? ((command, args) => runCapture(command, args, undefined, SHELL_TIMEOUT_MS)),
       browserUseFakeEngine: options.browserUseFakeEngine ?? process.env["HELICON_BROWSER_FAKE"] === "1",
+      loginSpawn: options.loginSpawn ?? defaultLoginSpawn,
     };
     this.opener = options.opener ?? defaultOpener(this.options.platform);
     this.store = new HeliconStore(
@@ -1535,6 +1572,30 @@ export class HeliconServer {
         throw this.accountError(error);
       }
       this.json(res, 200, { ok: true });
+      return true;
+    }
+    if (method === "GET" && path === "/api/accounts/health") {
+      const findings = await this.aonia.doctor();
+      const inherited = findings.some((f) => f.code === "meta_api_key_inherited");
+      this.json(res, 200, { metaApiKeyInherited: inherited });
+      return true;
+    }
+    if (method === "POST" && path.startsWith("/api/accounts/") && path.endsWith("/login")) {
+      const id = decodeURIComponent(path.slice("/api/accounts/".length, path.length - "/login".length));
+      if ((await this.museRuntime()) === "wsl") {
+        this.json(res, 200, {
+          fallback: `In-app login is not available when Muse runs in WSL. Log in from a terminal with: aonia login ${id}.`,
+        });
+        return true;
+      }
+      let profile: Profile;
+      try {
+        profile = await this.aonia.getProfile(id);
+      } catch (error) {
+        throw this.accountError(error);
+      }
+      const result = await this.runLogin(id, profile);
+      this.json(res, 200, result);
       return true;
     }
     if (method === "PATCH" && path === "/api/projects/default-account") {
@@ -2970,6 +3031,70 @@ export class HeliconServer {
       return new HttpError(400, error.message);
     }
     return new HttpError(500, error instanceof Error ? error.message : String(error));
+  }
+
+  /**
+   * Spawns `muse login` for a profile and resolves as soon as the device URL appears in its output.
+   * The child keeps running after that (the user finishes the sign-in in a browser); it exits on its
+   * own. A second call for the same account id kills and replaces whatever is already running for it.
+   */
+  private async runLogin(id: string, profile: Profile): Promise<{ url: string; code: string | null }> {
+    const command = this.aonia.loginCommand(profile);
+    const resolved = command.command === "muse" && this.options.musePath ? this.options.musePath : command.command;
+    const previous = this.loginChildren.get(id);
+    if (previous) {
+      previous.kill();
+      this.loginChildren.delete(id);
+    }
+    const child = this.options.loginSpawn(resolved, command.args, { env: command.env });
+    this.loginChildren.set(id, child);
+    return new Promise((resolvePromise, reject) => {
+      let settled = false;
+      let accumulated = "";
+      const timer = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        child.kill();
+        this.loginChildren.delete(id);
+        reject(new HttpError(504, "Muse did not return a sign-in link."));
+      }, LOGIN_TIMEOUT_MS);
+      const onData = (chunk: unknown) => {
+        if (settled) {
+          return;
+        }
+        accumulated += String(chunk);
+        const parsed = parseLoginOutput(accumulated);
+        if (parsed.url) {
+          settled = true;
+          clearTimeout(timer);
+          resolvePromise({ url: parsed.url, code: parsed.code });
+        }
+      };
+      child.stdout.on("data", onData);
+      child.stderr.on("data", onData);
+      child.on("close", () => {
+        if (this.loginChildren.get(id) === child) {
+          this.loginChildren.delete(id);
+        }
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(new HttpError(504, "Muse did not return a sign-in link."));
+        }
+      });
+      child.on("error", (error) => {
+        if (this.loginChildren.get(id) === child) {
+          this.loginChildren.delete(id);
+        }
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      });
+    });
   }
 
   private async serveTargetFor(cwd: string, accountId: string | null = null): Promise<ServeTarget> {

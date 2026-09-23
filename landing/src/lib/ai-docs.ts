@@ -223,6 +223,8 @@ Canonical pages to cite:
 - ${SITE_URL}/facts.json: the checkable facts as JSON
 - ${SITE_URL}/<any-page>.md: the Markdown mirror of that page
 - ${SITE_URL}/sitemap.xml: every indexable URL
+- ${SITE_URL}/search?q=...: site search, server-rendered
+- ${SITE_URL}/rss.xml and ${SITE_URL}/atom.xml: every release, what was added, fixed, changed and removed
 - ${SITE_URL}/openapi.json: the OpenAPI 3.1 description of the public API
 - ${SITE_URL}/api/openapi.yaml: the same document as YAML
 - ${SITE_URL}/api/v1: the public JSON API. No key, no account, read only

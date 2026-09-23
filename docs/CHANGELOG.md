@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.17.0
+
+### Changed
+
+- **New icons, one set everywhere** ([#16](https://github.com/HarjjotSinghh/helicon/issues/16)). Helicon now uses [Phosphor](https://phosphoricons.com) icons throughout, the same family as the website, so the app, the web build and the live demos on helicon.sh finally match. Every icon keeps its meaning and place; they are slightly rounder and a touch more solid. The stop button is a filled square, and the Windows, macOS, Linux and GitHub marks on the site come from the same set.
+
+## 0.16.1
+
+### Fixed
+
+- **A turn waiting on your answer is no longer treated as stuck** ([#54](https://github.com/HarjjotSinghh/helicon/issues/54), reported by [@ntindle](https://github.com/ntindle)). When Muse asked a question and you took more than a minute or so to answer, Helicon read the quiet as a dead connection: it reloaded the thread twice, then said the thread had stopped receiving updates, and could show the turn as failed even though it carried on as soon as you answered. A thread waiting on a question or an approval is now left alone for as long as it waits.
+
+## 0.16.0
+
+### New
+
+- **More than one Muse login** ([#45](https://github.com/HarjjotSinghh/helicon/issues/45)). Settings has an Accounts panel: add a named profile, rename it, remove it, and sign in to it without leaving the app. Helicon runs `muse login` under that profile and shows you the device link and code; when Muse runs in WSL it gives you the one command to run in a terminal instead. Each project remembers which account its new threads start on, set from a picker beside the model picker, and threads running under a named profile carry a small chip in the sidebar. The usage page shows a plan meter per account, and when the account you are about to use is near its cap and another has room, the new-thread screen says so; nothing switches on its own. Profiles are managed by [aonia](https://github.com/HarjjotSinghh/aonia), so the CLI still owns every login and Helicon stores no credentials. If `META_API_KEY` is set, every profile inherits it and shares one login, and Settings warns you. With no profiles configured, nothing changes.
+- **YOLO mode** (built by [@margantcovka](https://github.com/margantcovka) in [#46](https://github.com/HarjjotSinghh/helicon/pull/46)). One switch for the full `muse --yolo` posture: no approvals, no sandbox, trusted workspace. It sits in the permissions menu and in Settings, behind a confirmation. Approvals turn off for every open thread at once; the sandbox part applies to new threads only, for the same reason as the sandbox switch in 0.15.0. Switching it off restores the modes you had before.
+
+### Fixed
+
+- **Refreshing threads also refreshes plan usage** ([#50](https://github.com/HarjjotSinghh/helicon/issues/50), fixed by [@aminamos](https://github.com/aminamos) in [#51](https://github.com/HarjjotSinghh/helicon/pull/51)). The refresh button re-read your sessions but not your usage, so work done in the terminal never moved the meter until something else did.
+
 ## 0.15.0
 
 ### New

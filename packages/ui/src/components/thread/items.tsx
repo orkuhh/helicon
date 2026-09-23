@@ -1,24 +1,4 @@
-import {
-  ArrowDownToLine,
-  Bot,
-  ChevronRight,
-  CircleAlert,
-  CircleStop,
-  FilePen,
-  FileSearch,
-  FilePlus,
-  FileText,
-  FolderTree,
-  Globe,
-  ListTodo,
-  Minimize2,
-  MessageCircleQuestion,
-  Search,
-  Send,
-  SquareTerminal,
-  Target,
-  Wrench,
-} from "lucide-react";
+import { ArrowLineDownIcon, ArrowsInIcon, CaretRightIcon, ChatCircleDotsIcon, FileMagnifyingGlassIcon, FilePlusIcon, FileTextIcon, GlobeIcon, ListChecksIcon, MagnifyingGlassIcon, PaperPlaneRightIcon, PencilSimpleLineIcon, RobotIcon, StopCircleIcon, TargetIcon, TerminalWindowIcon, TreeStructureIcon, WarningCircleIcon, WrenchIcon } from "../ui/icons.js";
 import { Popover } from "radix-ui";
 import { memo, useMemo, useRef, useState, type ReactNode } from "react";
 import { useApp, useController } from "../../app/context.js";
@@ -52,25 +32,25 @@ const TERMINAL_FAILURES = new Set(["failed", "rejected", "cancelled", "timedOut"
 export type Gate = "approval" | "input";
 
 const TOOL_ICONS: Record<ToolKind, (props: { size: number; className?: string }) => ReactNode> = {
-  shell: (p) => <SquareTerminal {...p} />,
-  read: (p) => <FileText {...p} />,
-  edit: (p) => <FilePen {...p} />,
-  write: (p) => <FilePlus {...p} />,
-  search: (p) => <Search {...p} />,
-  list: (p) => <FolderTree {...p} />,
-  web: (p) => <Globe {...p} />,
-  question: (p) => <MessageCircleQuestion {...p} />,
-  plan: (p) => <ListTodo {...p} />,
-  agent: (p) => <Bot {...p} />,
-  goal: (p) => <Target {...p} />,
-  generic: (p) => <Wrench {...p} />,
+  shell: (p) => <TerminalWindowIcon {...p} />,
+  read: (p) => <FileTextIcon {...p} />,
+  edit: (p) => <PencilSimpleLineIcon {...p} />,
+  write: (p) => <FilePlusIcon {...p} />,
+  search: (p) => <MagnifyingGlassIcon {...p} />,
+  list: (p) => <TreeStructureIcon {...p} />,
+  web: (p) => <GlobeIcon {...p} />,
+  question: (p) => <ChatCircleDotsIcon {...p} />,
+  plan: (p) => <ListChecksIcon {...p} />,
+  agent: (p) => <RobotIcon {...p} />,
+  goal: (p) => <TargetIcon {...p} />,
+  generic: (p) => <WrenchIcon {...p} />,
 };
 
 /**
  * One work-log row: icon, label, an inline chip for what it acted on, and an expandable body.
  * Hovering swaps the icon for the disclosure chevron.
  * Layout via Beautiful UI ToolChips (beautifului.dev), MIT (c) 2026 Shane Levine.
- * Adapted: Helicon tokens, lucide icons, real tool data, Collapse body.
+ * Adapted: Helicon tokens, Phosphor icons, real tool data, Collapse body.
  */
 function Row(props: {
   icon: ReactNode;
@@ -116,9 +96,8 @@ function Row(props: {
             {props.icon}
           </span>
           {expandable ? (
-            <ChevronRight
+            <CaretRightIcon
               size={13}
-              strokeWidth={2.2}
               className={cn(
                 "absolute text-subtle opacity-0 transition-[opacity,transform] duration-150 ease-out group-hover/row:opacity-100 group-focus-visible/row:opacity-100",
                 open && "rotate-90 opacity-100",
@@ -270,7 +249,7 @@ function OpenFileAction(props: { sessionId: string; path: string }) {
   return (
     <Tip label="Open in files">
       <IconButton size="sm" label={`Open ${target.path}`} onClick={() => controller.openFile(props.sessionId, target.path, target.line)}>
-        <FileSearch size={13} />
+        <FileMagnifyingGlassIcon size={13} />
       </IconButton>
     </Tip>
   );
@@ -292,7 +271,7 @@ function TaskActions(props: { item: MspItem; sessionId: string }) {
       loading={busy}
       onClick={() => void controller.taskAction(sessionId, "stop", item.itemId)}
     >
-      <CircleStop size={12} /> Stop
+      <StopCircleIcon size={12} /> Stop
     </Button>
   ) : (
     <Button
@@ -303,7 +282,7 @@ function TaskActions(props: { item: MspItem; sessionId: string }) {
       title="Let this keep running while Muse moves on"
       onClick={() => void controller.taskAction(sessionId, "background", item.itemId)}
     >
-      <ArrowDownToLine size={12} /> Background
+      <ArrowLineDownIcon size={12} /> Background
     </Button>
   );
 }
@@ -445,7 +424,7 @@ function DiffChip(props: { file: FileChanges; sessionId?: string }) {
           title={props.file.path}
           className="inline-flex h-7 max-w-full items-center gap-2 rounded-lg bg-raised px-2 font-mono text-[11.5px] text-fg shadow-btn transition-colors duration-100 hover:bg-hover data-[state=open]:bg-hover"
         >
-          <FilePen size={12} className="shrink-0 text-subtle" />
+          <PencilSimpleLineIcon size={12} className="shrink-0 text-subtle" />
           <span className="min-w-0 truncate">{basename(props.file.path)}</span>
           <DiffCount added={props.file.added} removed={props.file.removed} />
         </button>
@@ -473,7 +452,7 @@ function DiffChip(props: { file: FileChanges; sessionId?: string }) {
                   controller.openFile(props.sessionId!, target.path);
                 }}
               >
-                <FileSearch size={12} /> Open file
+                <FileMagnifyingGlassIcon size={12} /> Open file
               </Button>
             </div>
           ) : null}
@@ -577,7 +556,7 @@ export const ToolRow = memo(function ToolRow(props: { item: MspItem; gate?: Gate
   if (item.failureReason) {
     body.push(
       <p key="fail" className="flex items-start gap-1.5 text-xs text-danger-text">
-        <CircleAlert size={13} className="mt-px shrink-0" /> {item.failureReason}
+        <WarningCircleIcon size={13} className="mt-px shrink-0" /> {item.failureReason}
       </p>,
     );
   }
@@ -634,7 +613,7 @@ export const ShellRow = memo(function ShellRow(props: { item: MspItem; sessionId
   const noSandbox = failed && /shell sandbox is unavailable/i.test(item.visibleOutput ?? "");
   return (
     <Row
-      icon={<SquareTerminal size={14} />}
+      icon={<TerminalWindowIcon size={14} />}
       label="You ran"
       chip={item.commandText ?? "a command"}
       mono
@@ -697,7 +676,7 @@ export const SubagentRow = memo(function SubagentRow(props: { item: MspItem; ses
   const controls = props.sessionId && item.subagentId ? <SubagentControls item={item} sessionId={props.sessionId} subagentId={item.subagentId} /> : null;
   return (
     <Row
-      icon={<Bot size={14} />}
+      icon={<RobotIcon size={14} />}
       label={running ? "Subagent working on" : "Subagent"}
       detail={item.objective ?? item.role ?? "a task"}
       tone={TERMINAL_FAILURES.has(item.status) ? "danger" : "default"}
@@ -763,7 +742,7 @@ function SubagentControls(props: { item: MspItem; sessionId: string; subagentId:
           className="h-7 min-w-0 flex-1 rounded-md bg-sunken px-2 text-sm text-fg shadow-[0_0_0_1px_var(--border)] outline-none placeholder:text-subtle focus-visible:shadow-[0_0_0_1px_var(--accent)]"
         />
         <Button type="submit" size="sm" variant="secondary" disabled={!note.trim()} loading={busy}>
-          <Send size={12} /> Send
+          <PaperPlaneRightIcon size={12} /> Send
         </Button>
       </form>
       <div className="flex flex-wrap items-center gap-1">
@@ -773,7 +752,7 @@ function SubagentControls(props: { item: MspItem; sessionId: string; subagentId:
               Pause at next step
             </Button>
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => act("stop")}>
-              <CircleStop size={13} /> Stop
+              <StopCircleIcon size={13} /> Stop
             </Button>
           </>
         ) : null}
@@ -820,7 +799,7 @@ export function CompactionRow(props: { item: MspItem }) {
     <div className="my-1 flex items-center gap-3 text-xs text-subtle" role="note">
       <span className="h-px flex-1 bg-line" />
       <span className="flex items-center gap-1.5">
-        {running ? <Spinner size={10} /> : <Minimize2 size={12} />}
+        {running ? <Spinner size={10} /> : <ArrowsInIcon size={12} />}
         {label}
         {saved ? <span className="tabular-nums">({saved})</span> : null}
       </span>
@@ -833,7 +812,7 @@ export function GenericRow(props: { item: MspItem }) {
   const { item } = props;
   return (
     <Row
-      icon={<Wrench size={14} />}
+      icon={<WrenchIcon size={14} />}
       label={humanize(item.kind)}
       detail={item.fallbackText}
       trailing={item.status === "inProgress" ? <Spinner size={12} /> : null}

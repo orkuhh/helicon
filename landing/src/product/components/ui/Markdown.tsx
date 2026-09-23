@@ -1,4 +1,4 @@
-import { Check, Copy } from "lucide-react";
+import { CheckIcon, CopyIcon } from "./icons";
 import { Children, createContext, isValidElement, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { looksLikeFilePath, type FileTarget } from "../../model/files";
 import { STREAM_SAMPLE_MS, streamRenderMode } from "../../model/streaming";
@@ -42,7 +42,7 @@ export function CopyButton(props: { text: string; label?: string; className?: st
       )}
     >
       <SwapIcon value={copied ? "copied" : "copy"}>
-        {copied ? <Check size={13} className="text-ok" /> : <Copy size={13} />}
+        {copied ? <CheckIcon size={13} className="text-ok" /> : <CopyIcon size={13} />}
       </SwapIcon>
     </button>
   );

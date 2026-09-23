@@ -1,4 +1,4 @@
-import { Lock, RotateCw, Unlock } from "lucide-react";
+import { ArrowClockwiseIcon, LockIcon, LockOpenIcon } from "../ui/icons.js";
 import type { BrowserTabSnapshot } from "../../types.js";
 import { cn } from "../ui/primitives.js";
 import { DEVICE_PRESETS, ZOOM_LADDER } from "./browserUiConstants.js";
@@ -73,7 +73,7 @@ export function BrowserDeviceToolbar(props: {
             title="Swap width and height"
             onClick={() => props.onViewport({ ...vp, width: vp.height, height: vp.width })}
           >
-            <RotateCw size={12} />
+            <ArrowClockwiseIcon size={12} />
           </button>
           <button
             type="button"
@@ -81,7 +81,7 @@ export function BrowserDeviceToolbar(props: {
             title={props.aspectLocked ? "Unlock aspect ratio" : "Lock aspect ratio"}
             onClick={() => props.onAspectLockedChange(!props.aspectLocked)}
           >
-            {props.aspectLocked ? <Lock size={12} /> : <Unlock size={12} />}
+            {props.aspectLocked ? <LockIcon size={12} /> : <LockOpenIcon size={12} />}
           </button>
         </>
       ) : null}

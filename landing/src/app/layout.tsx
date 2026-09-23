@@ -53,6 +53,8 @@ export const metadata: Metadata = {
       "text/plain": [{ url: "/llms.txt", title: "llms.txt" }],
       "text/markdown": [{ url: "/agents.md", title: "AGENTS.md" }],
       "application/json": [{ url: "/facts.json", title: "Checkable facts about Helicon" }],
+      "application/rss+xml": [{ url: "/rss.xml", title: "Helicon releases (RSS)" }],
+      "application/atom+xml": [{ url: "/atom.xml", title: "Helicon releases (Atom)" }],
     },
   },
   // Search Console and Webmaster Tools verification. Set the env vars once per property; an

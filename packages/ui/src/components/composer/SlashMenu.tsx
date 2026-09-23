@@ -1,4 +1,4 @@
-import { BookOpen, Brain, CornerDownLeft, Cpu, FileText, GitFork, Globe, History, Minimize2, Shield, SquarePen, Target } from "lucide-react";
+import { ArrowElbowDownLeftIcon, ArrowsInIcon, BookOpenIcon, BrainIcon, ClockCounterClockwiseIcon, CpuIcon, FileTextIcon, GitForkIcon, GlobeIcon, NotePencilIcon, ShieldIcon, TargetIcon } from "../ui/icons.js";
 import { useEffect, type ReactNode } from "react";
 import type { SlashAction, SlashCommand } from "../../model/slash.js";
 import { Spinner, cn } from "../ui/primitives.js";
@@ -10,17 +10,17 @@ export type SlashMenuState =
   | { kind: "loading" };
 
 const ACTION_ICONS: Record<SlashAction, ReactNode> = {
-  compact: <Minimize2 size={14} />,
-  model: <Cpu size={14} />,
-  effort: <Brain size={14} />,
-  permissions: <Shield size={14} />,
-  fork: <GitFork size={14} />,
-  new: <SquarePen size={14} />,
-  resume: <History size={14} />,
-  init: <FileText size={14} />,
-  skill: <BookOpen size={14} />,
-  goal: <Target size={14} />,
-  browser: <Globe size={14} />,
+  compact: <ArrowsInIcon size={14} />,
+  model: <CpuIcon size={14} />,
+  effort: <BrainIcon size={14} />,
+  permissions: <ShieldIcon size={14} />,
+  fork: <GitForkIcon size={14} />,
+  new: <NotePencilIcon size={14} />,
+  resume: <ClockCounterClockwiseIcon size={14} />,
+  init: <FileTextIcon size={14} />,
+  skill: <BookOpenIcon size={14} />,
+  goal: <TargetIcon size={14} />,
+  browser: <GlobeIcon size={14} />,
 };
 
 /** Where a skill comes from, for the ones not built into Muse. */
@@ -121,7 +121,7 @@ export function SlashMenu(props: {
             className={cn(ROW, "bg-hover")}
           >
             <span className="flex size-4 shrink-0 items-center justify-center text-muted">
-              <CornerDownLeft size={14} />
+              <ArrowElbowDownLeftIcon size={14} />
             </span>
             <span className="min-w-0 flex-1 truncate">
               No command named <span className="font-medium">/{state.name}</span>

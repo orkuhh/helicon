@@ -1,4 +1,4 @@
-import { ChevronDown, CircleStop, PanelRightOpen, RotateCcw, SkipForward, Workflow } from "lucide-react";
+import { ArrowCounterClockwiseIcon, CaretDownIcon, FlowArrowIcon, SkipForwardIcon, SquareHalfIcon, StopCircleIcon } from "../ui/icons";
 import { memo, useMemo, useState } from "react";
 import { useApp, useController } from "../../app/context";
 import { formatDuration, humanize } from "../../model/format";
@@ -59,7 +59,7 @@ export const WorkflowCard = memo(function WorkflowCard(props: { item: MspItem; s
         onClick={() => controller.setCardOpen(cardKey, !open)}
         className="flex h-10 w-full items-center gap-2.5 px-3.5 text-left transition-colors hover:bg-hover"
       >
-        <Workflow size={15} className="shrink-0 text-subtle" />
+        <FlowArrowIcon size={15} className="shrink-0 text-subtle" />
         <span className="shrink-0 text-sm font-medium text-fg">Workflow</span>
         <span className={cn("shrink-0 rounded-md px-1.5 py-px text-2xs font-medium", PILL[tone])}>
           {view.running ? "Running" : humanize(view.status)}
@@ -72,7 +72,7 @@ export const WorkflowCard = memo(function WorkflowCard(props: { item: MspItem; s
         {!open ? <span className="min-w-0 truncate text-xs text-muted">{view.objective ?? view.label}</span> : null}
         <span className="min-w-2 flex-1" />
         {view.running ? <Spinner size={12} className="shrink-0 text-accent-text" /> : null}
-        <ChevronDown size={14} className={cn("shrink-0 text-subtle transition-transform duration-200", !open && "-rotate-90")} />
+        <CaretDownIcon size={14} className={cn("shrink-0 text-subtle transition-transform duration-200", !open && "-rotate-90")} />
       </button>
       {open ? (
         <div className="px-3.5 pb-3">
@@ -104,7 +104,7 @@ export const WorkflowCard = memo(function WorkflowCard(props: { item: MspItem; s
           ) : null}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button size="sm" variant="ghost" onClick={() => setDetail(true)}>
-              <PanelRightOpen size={13} /> Details
+              <SquareHalfIcon size={13} /> Details
             </Button>
             {view.running && view.runId && sessionId ? <CancelRun sessionId={sessionId} runId={view.runId} /> : null}
           </div>
@@ -132,7 +132,7 @@ function CancelRun(props: { sessionId: string; runId: string }) {
   }
   return (
     <Button size="sm" variant="ghost" loading={busy} onClick={() => void controller.workflowAction(props.sessionId, "cancel", props.runId)}>
-      <CircleStop size={13} /> Cancel run
+      <StopCircleIcon size={13} /> Cancel run
     </Button>
   );
 }
@@ -229,12 +229,12 @@ function AgentRow(props: { agent: WorkflowAgent; controls: { sessionId: string; 
       </span>
       {controls && !agent.terminal ? (
         <IconButton size="xs" label={`Skip ${agent.id}`} title="Skip this agent" disabled={busy} onClick={() => act("skip")}>
-          <SkipForward size={12} />
+          <SkipForwardIcon size={12} />
         </IconButton>
       ) : null}
       {controls && failed ? (
         <IconButton size="xs" label={`Retry ${agent.id}`} title="Run this agent again" disabled={busy} onClick={() => act("retry")}>
-          <RotateCcw size={12} />
+          <ArrowCounterClockwiseIcon size={12} />
         </IconButton>
       ) : null}
     </li>

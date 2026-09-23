@@ -1,20 +1,4 @@
-import {
-  ArrowLeft,
-  ArrowRight,
-  Camera,
-  Circle,
-  ExternalLink,
-  Globe,
-  MousePointer2,
-  PictureInPicture2,
-  Plus,
-  RefreshCw,
-  Square,
-  Video,
-  Volume2,
-  VolumeX,
-  X,
-} from "lucide-react";
+import { ArrowLeftIcon, ArrowRightIcon, ArrowSquareOutIcon, ArrowsClockwiseIcon, CameraIcon, CircleIcon, CursorClickIcon, GlobeIcon, PictureInPictureIcon, PlusIcon, SpeakerHighIcon, SpeakerXIcon, SquareIcon, VideoCameraIcon, XIcon } from "../ui/icons.js";
 import { useEffect, useRef, useState } from "react";
 import { shallowEqual, useApp, useController } from "../../app/context.js";
 import { useOverlayDragProps } from "../../app/frame.js";
@@ -119,7 +103,7 @@ export function BrowserPanel(props: { sessionId: string }) {
                   }
                 }}
               >
-                {tab.muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                {tab.muted ? <SpeakerXIcon size={12} /> : <SpeakerHighIcon size={12} />}
               </span>
             ) : null}
             <span
@@ -139,12 +123,12 @@ export function BrowserPanel(props: { sessionId: string }) {
                 }
               }}
             >
-              <X size={12} />
+              <XIcon size={12} />
             </span>
           </div>
         ))}
         <IconButton label="New browser tab" onClick={() => void controller.openBrowserTab(props.sessionId)}>
-          <Plus size={14} />
+          <PlusIcon size={14} />
         </IconButton>
       </div>
       {active ? (
@@ -162,10 +146,10 @@ export function BrowserPanel(props: { sessionId: string }) {
           </span>
         ) : null}
         <IconButton label="Back" onClick={() => active && void controller.backBrowserTab(props.sessionId, active.tabId)}>
-          <ArrowLeft size={14} />
+          <ArrowLeftIcon size={14} />
         </IconButton>
         <IconButton label="Forward" onClick={() => active && void controller.forwardBrowserTab(props.sessionId, active.tabId)}>
-          <ArrowRight size={14} />
+          <ArrowRightIcon size={14} />
         </IconButton>
         <IconButton
           label={browser?.loading ? "Stop" : "Reload"}
@@ -180,26 +164,26 @@ export function BrowserPanel(props: { sessionId: string }) {
             }
           }}
         >
-          {browser?.loading ? <Square size={14} /> : <RefreshCw size={14} />}
+          {browser?.loading ? <SquareIcon size={14} /> : <ArrowsClockwiseIcon size={14} />}
         </IconButton>
         <IconButton
           label="Open in system browser"
           onClick={() => active?.url && void controller.openBrowserUrlExternally(active.url)}
         >
-          <ExternalLink size={14} />
+          <ArrowSquareOutIcon size={14} />
         </IconButton>
         <IconButton
           label="Pick element"
           active={browser?.pickActive}
           onClick={() => active && void controller.toggleBrowserPick(props.sessionId, active.tabId, !browser?.pickActive)}
         >
-          <MousePointer2 size={14} />
+          <CursorClickIcon size={14} />
         </IconButton>
         <IconButton
           label="Screenshot"
           onClick={() => active && void controller.captureBrowserScreenshot(props.sessionId, active.tabId)}
         >
-          <Camera size={14} />
+          <CameraIcon size={14} />
         </IconButton>
         <IconButton
           label={browser?.recording ? "Stop recording" : "Record"}
@@ -208,19 +192,19 @@ export function BrowserPanel(props: { sessionId: string }) {
             active && void controller.toggleBrowserRecording(props.sessionId, active.tabId, !browser?.recording)
           }
         >
-          {browser?.recording ? <Circle size={14} className="fill-red-500 text-red-500" /> : <Video size={14} />}
+          {browser?.recording ? <CircleIcon size={14} className="fill-red-500 text-red-500" /> : <VideoCameraIcon size={14} />}
         </IconButton>
         <IconButton
           label="Picture-in-picture"
           onClick={() => active && void controller.openBrowserPip(props.sessionId, active.tabId)}
         >
-          <PictureInPicture2 size={14} />
+          <PictureInPictureIcon size={14} />
         </IconButton>
         <IconButton
           label="Mini player"
           onClick={() => controller.setBrowserMiniPlayer(props.sessionId, !browser?.miniPlayerOpen)}
         >
-          <PictureInPicture2 size={14} className="rotate-180" />
+          <PictureInPictureIcon size={14} className="rotate-180" />
         </IconButton>
         {active ? (
           <BrowserMoreMenu
@@ -360,7 +344,7 @@ function EmptyBrowser(props: {
   return (
     <div className="flex h-full flex-col gap-4 overflow-auto p-4 text-sm text-muted">
       <div className="flex items-center gap-2 text-fg">
-        <Globe size={16} />
+        <GlobeIcon size={16} />
         <span className="font-medium">Browser</span>
       </div>
       {props.discovered.length > 0 ? (
@@ -387,7 +371,7 @@ function EmptyBrowser(props: {
                   {h.title ?? h.url}
                 </button>
                 <button type="button" className="text-subtle hover:text-fg" title="Remove" onClick={() => props.onRemoveHistory(h.url)}>
-                  <X size={12} />
+                  <XIcon size={12} />
                 </button>
               </li>
             ))}

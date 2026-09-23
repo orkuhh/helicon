@@ -1,5 +1,5 @@
 import { Command } from "cmdk";
-import { FolderPlus, Folder, Globe, Layers, Monitor, Moon, PanelLeft, RefreshCw, RotateCcw, RotateCw, Search, ShieldOff, SquarePen, Sun, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowClockwiseIcon, ArrowCounterClockwiseIcon, ArrowsClockwiseIcon, FolderIcon, FolderPlusIcon, GlobeIcon, MagnifyingGlassIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, MonitorIcon, MoonIcon, NotePencilIcon, ShieldSlashIcon, SidebarSimpleIcon, StackIcon, SunIcon } from "../ui/icons.js";
 import { useMemo, type ReactNode } from "react";
 import { useApp, useController, useNow } from "../../app/context.js";
 import { basename, relativeTime } from "../../model/format.js";
@@ -58,7 +58,7 @@ export function CommandPalette() {
     >
       <Command loop label="Search threads, projects and actions">
         <div className="flex items-center gap-2.5 border-b border-line px-4">
-          <Search size={16} className="shrink-0 text-subtle" />
+          <MagnifyingGlassIcon size={16} className="shrink-0 text-subtle" />
           <Command.Input
             placeholder="Search threads, projects and actions"
             className="h-12 min-w-0 flex-1 bg-transparent text-base text-fg outline-none placeholder:text-subtle"
@@ -67,29 +67,29 @@ export function CommandPalette() {
         <Command.List className="max-h-[min(440px,62vh)] overflow-y-auto p-1.5">
           <Command.Empty className="px-3 py-10 text-center text-sm text-muted">Nothing matches that search.</Command.Empty>
           <Command.Group heading="Actions" className={GROUP}>
-            <Item value="New thread" icon={<SquarePen size={15} />} onSelect={() => run(() => controller.newThread())} hint={<Shortcut keys={[MOD, "Shift", "O"]} />}>
+            <Item value="New thread" icon={<NotePencilIcon size={15} />} onSelect={() => run(() => controller.newThread())} hint={<Shortcut keys={[MOD, "Shift", "O"]} />}>
               New thread
             </Item>
-            <Item value="Add project folder" icon={<FolderPlus size={15} />} onSelect={() => run(() => controller.setAddProjectOpen(true))}>
+            <Item value="Add project folder" icon={<FolderPlusIcon size={15} />} onSelect={() => run(() => controller.setAddProjectOpen(true))}>
               Add project
             </Item>
-            <Item value="Refresh threads from Muse" icon={<RefreshCw size={15} />} onSelect={() => run(() => void controller.discoverAll())}>
+            <Item value="Refresh threads from Muse" icon={<ArrowsClockwiseIcon size={15} />} onSelect={() => run(() => void controller.discoverAll())}>
               Refresh threads from Muse
             </Item>
             <Item
               value={groupBy === "project" ? "Group sidebar by status" : "Group sidebar by project"}
-              icon={<Layers size={15} />}
+              icon={<StackIcon size={15} />}
               onSelect={() => run(() => controller.setGroupBy(groupBy === "project" ? "status" : "project"))}
             >
               {groupBy === "project" ? "Group sidebar by status" : "Group sidebar by project"}
             </Item>
-            <Item value="Toggle sidebar" icon={<PanelLeft size={15} />} onSelect={() => run(() => controller.toggleSidebar())} hint={<Shortcut keys={[MOD, "B"]} />}>
+            <Item value="Toggle sidebar" icon={<SidebarSimpleIcon size={15} />} onSelect={() => run(() => controller.toggleSidebar())} hint={<Shortcut keys={[MOD, "B"]} />}>
               Toggle sidebar
             </Item>
             <Item
               value="Open browser panel"
               keywords={["preview", "web"]}
-              icon={<Globe size={15} />}
+              icon={<GlobeIcon size={15} />}
               onSelect={() => run(() => controller.toggleBrowser(true))}
               hint={<Shortcut keys={[MOD, "Shift", "B"]} />}
             >
@@ -99,37 +99,37 @@ export function CommandPalette() {
               <Item
                 value="New browser tab"
                 keywords={["preview"]}
-                icon={<Globe size={15} />}
+                icon={<GlobeIcon size={15} />}
                 onSelect={() => run(() => void controller.openBrowserTab(activeThread))}
               >
                 New browser tab
               </Item>
             ) : null}
-            <Item value="Theme system" keywords={["appearance"]} icon={<Monitor size={15} />} onSelect={() => run(() => controller.setTheme("system"))}>
+            <Item value="Theme system" keywords={["appearance"]} icon={<MonitorIcon size={15} />} onSelect={() => run(() => controller.setTheme("system"))}>
               Use system theme
             </Item>
-            <Item value="Theme light" keywords={["appearance"]} icon={<Sun size={15} />} onSelect={() => run(() => controller.setTheme("light"))}>
+            <Item value="Theme light" keywords={["appearance"]} icon={<SunIcon size={15} />} onSelect={() => run(() => controller.setTheme("light"))}>
               Use light theme
             </Item>
-            <Item value="Theme dark" keywords={["appearance"]} icon={<Moon size={15} />} onSelect={() => run(() => controller.setTheme("dark"))}>
+            <Item value="Theme dark" keywords={["appearance"]} icon={<MoonIcon size={15} />} onSelect={() => run(() => controller.setTheme("dark"))}>
               Use dark theme
             </Item>
-            <Item value="Zoom in" keywords={["appearance", "bigger", "font size"]} icon={<ZoomIn size={15} />} onSelect={() => run(() => controller.zoomIn())} hint={<Shortcut keys={[MOD, "+"]} />}>
+            <Item value="Zoom in" keywords={["appearance", "bigger", "font size"]} icon={<MagnifyingGlassPlusIcon size={15} />} onSelect={() => run(() => controller.zoomIn())} hint={<Shortcut keys={[MOD, "+"]} />}>
               Zoom in
             </Item>
-            <Item value="Zoom out" keywords={["appearance", "smaller", "font size"]} icon={<ZoomOut size={15} />} onSelect={() => run(() => controller.zoomOut())} hint={<Shortcut keys={[MOD, "-"]} />}>
+            <Item value="Zoom out" keywords={["appearance", "smaller", "font size"]} icon={<MagnifyingGlassMinusIcon size={15} />} onSelect={() => run(() => controller.zoomOut())} hint={<Shortcut keys={[MOD, "-"]} />}>
               Zoom out
             </Item>
-            <Item value="Reset zoom" keywords={["appearance", "100%"]} icon={<RotateCcw size={15} />} onSelect={() => run(() => controller.resetZoom())} hint={<Shortcut keys={[MOD, "0"]} />}>
+            <Item value="Reset zoom" keywords={["appearance", "100%"]} icon={<ArrowCounterClockwiseIcon size={15} />} onSelect={() => run(() => controller.resetZoom())} hint={<Shortcut keys={[MOD, "0"]} />}>
               Reset zoom
             </Item>
             {updates?.status === "ready" ? (
-              <Item value="Restart to update" keywords={["update", "install", "version"]} icon={<RotateCw size={15} />} onSelect={() => run(() => controller.restartToUpdate())}>
+              <Item value="Restart to update" keywords={["update", "install", "version"]} icon={<ArrowClockwiseIcon size={15} />} onSelect={() => run(() => controller.restartToUpdate())}>
                 Restart to install Helicon {updates.update?.version ?? ""}
               </Item>
             ) : null}
             {updates ? (
-              <Item value="Check for updates" keywords={["update", "version"]} icon={<RefreshCw size={15} />} onSelect={() => run(() => controller.checkForUpdates())}>
+              <Item value="Check for updates" keywords={["update", "version"]} icon={<ArrowsClockwiseIcon size={15} />} onSelect={() => run(() => controller.checkForUpdates())}>
                 Check for updates
               </Item>
             ) : null}
@@ -155,7 +155,7 @@ export function CommandPalette() {
                     <span className="truncate">{session.title}</span>
                     {session.sandboxDisabled === true ? (
                       <span title="Sandbox off" className="flex shrink-0 items-center gap-1 text-warn-text">
-                        <ShieldOff size={12} aria-hidden="true" />
+                        <ShieldSlashIcon size={12} aria-hidden="true" />
                         <span className="sr-only">, sandbox off</span>
                       </span>
                     ) : null}
@@ -171,7 +171,7 @@ export function CommandPalette() {
                 <Item
                   key={project.cwd}
                   value={`New thread in ${project.displayName} ${project.cwd}`}
-                  icon={<Folder size={15} />}
+                  icon={<FolderIcon size={15} />}
                   onSelect={() => run(() => controller.newThread(project.cwd))}
                 >
                   <span className="truncate">New thread in {project.displayName}</span>

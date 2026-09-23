@@ -1,5 +1,6 @@
 import { describe, it, after } from "node:test";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,6 +16,8 @@ import {
   toWireEvent,
   type HostExit,
   type HostHandle,
+  type LoginChild,
+  type LoginSpawn,
   type OpenTarget,
 } from "../src/server.js";
 import type { ExecFn, ServeTarget } from "@helicon/daemon";
@@ -74,6 +77,23 @@ class FakeConnection {
 interface FactoryProbe {
   targets: ServeTarget[];
   exits: ((exit: HostExit) => void)[];
+}
+
+/** A fake `muse login` child: stdout/stderr an EventEmitter each, `kill()` fires `close` like a real process. */
+class FakeLoginChild {
+  stdout = new EventEmitter();
+  stderr = new EventEmitter();
+  private readonly emitter = new EventEmitter();
+  killCount = 0;
+
+  on(event: "close" | "error", listener: (arg: unknown) => void): void {
+    this.emitter.on(event, listener);
+  }
+
+  kill(): void {
+    this.killCount += 1;
+    setImmediate(() => this.emitter.emit("close", null));
+  }
 }
 
 function fakeFactory(connection: FakeConnection, probe?: FactoryProbe): (target: ServeTarget) => HostHandle {
@@ -1368,6 +1388,109 @@ describe("HeliconServer", () => {
     assert.equal((await send(base, "/api/accounts", { id: "Not Valid" })).status, 400);
     await send(base, "/api/accounts", { id: "work" });
     assert.equal((await send(base, "/api/accounts", { id: "work" })).status, 409);
+  });
+
+  it("reports metaApiKeyInherited from the aonia doctor finding", async () => {
+    const connection = new FakeConnection();
+    const home = await mkdtemp(join(tmpdir(), "helicon-aonia-"));
+    const { base } = await start(connection, {
+      aonia: createAonia({ home, platform: "linux", musePath: "muse", env: { META_API_KEY: "x" } }),
+    });
+    const res = await get(base, "/api/accounts/health");
+    assert.equal(res.metaApiKeyInherited, true);
+  });
+
+  it("reports metaApiKeyInherited false when META_API_KEY is not set", async () => {
+    const connection = new FakeConnection();
+    const home = await mkdtemp(join(tmpdir(), "helicon-aonia-"));
+    const { base } = await start(connection, {
+      aonia: createAonia({ home, platform: "linux", musePath: "muse", env: {} }),
+    });
+    const res = await get(base, "/api/accounts/health");
+    assert.equal(res.metaApiKeyInherited, false);
+  });
+
+  it("logs an account in: resolves url and code from staged stdout, through the server's own muse path", async () => {
+    const connection = new FakeConnection();
+    const home = await mkdtemp(join(tmpdir(), "helicon-aonia-"));
+    const aonia = createAonia({ home, platform: "linux", musePath: "muse" });
+    await aonia.createProfile("work");
+    const calls: { command: string; args: string[]; env: Record<string, string> }[] = [];
+    const children: FakeLoginChild[] = [];
+    const loginSpawn: LoginSpawn = (command, args, opts) => {
+      calls.push({ command, args, env: opts.env });
+      const child = new FakeLoginChild();
+      children.push(child);
+      setImmediate(() => {
+        child.stdout.emit("data", "Open this page to sign in: https://auth.meta.com/oauth/device/?code=ABCD-1234\n");
+      });
+      return child as unknown as LoginChild;
+    };
+    // aonia's own musePath stays the bare default "muse"; the server carries a different configured
+    // path, so the route must resolve through the server's own musePath rather than aonia's.
+    const { base } = await start(connection, { musePath: "/custom/muse", aonia, loginSpawn });
+
+    const res = await send(base, "/api/accounts/work/login", undefined);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.json, { url: "https://auth.meta.com/oauth/device/?code=ABCD-1234", code: "ABCD-1234" });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].command, "/custom/muse");
+    assert.deepEqual(calls[0].args, ["login"]);
+  });
+
+  it("returns a WSL fallback for the login route instead of spawning", async () => {
+    const connection = new FakeConnection();
+    const home = await mkdtemp(join(tmpdir(), "helicon-aonia-"));
+    const aonia = createAonia({ home, platform: "linux", musePath: "muse" });
+    await aonia.createProfile("work");
+    let spawned = false;
+    const loginSpawn: LoginSpawn = () => {
+      spawned = true;
+      throw new Error("must not spawn when Muse runs in WSL");
+    };
+    const { base } = await start(connection, {
+      platform: "win32",
+      musePath: "/home/dev/.local/bin/muse",
+      aonia,
+      loginSpawn,
+    });
+
+    const res = await send(base, "/api/accounts/work/login", undefined);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.json, {
+      fallback: "In-app login is not available when Muse runs in WSL. Log in from a terminal with: aonia login work.",
+    });
+    assert.equal(spawned, false);
+  });
+
+  it("kills the first login child when a second login call arrives for the same account", async () => {
+    const connection = new FakeConnection();
+    const home = await mkdtemp(join(tmpdir(), "helicon-aonia-"));
+    const aonia = createAonia({ home, platform: "linux", musePath: "muse" });
+    await aonia.createProfile("work");
+    const children: FakeLoginChild[] = [];
+    const loginSpawn: LoginSpawn = () => {
+      const child = new FakeLoginChild();
+      children.push(child);
+      return child as unknown as LoginChild;
+    };
+    const { base } = await start(connection, { aonia, loginSpawn });
+
+    const first = send(base, "/api/accounts/work/login", undefined);
+    await waitFor(() => children.length === 1, "first login child to spawn");
+
+    const second = send(base, "/api/accounts/work/login", undefined);
+    await waitFor(() => children.length === 2, "second login child to spawn");
+    assert.equal(children[0]?.killCount, 1);
+
+    children[1]?.stdout.emit("data", "Open this page to sign in: https://auth.meta.com/oauth/device/?code=WXYZ-9999\n");
+    const secondRes = await second;
+    assert.equal(secondRes.status, 200);
+    assert.deepEqual(secondRes.json, { url: "https://auth.meta.com/oauth/device/?code=WXYZ-9999", code: "WXYZ-9999" });
+
+    // The killed first child's own close event lands async; give it a moment to settle its request.
+    const firstRes = await first;
+    assert.equal(firstRes.status, 504);
   });
 
   it("sets a project's default account", async () => {

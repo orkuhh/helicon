@@ -1,6 +1,6 @@
 import { usePortalContainer } from "@/demo/portal";
 import { Dialog as RDialog, DropdownMenu, Tooltip as RTooltip } from "radix-ui";
-import { Check, X } from "lucide-react";
+import { CheckIcon, XIcon } from "./icons";
 import type { ReactElement, ReactNode } from "react";
 import { Shortcut, cn } from "./primitives";
 
@@ -133,7 +133,7 @@ export function MenuOption(props: {
         ) : null}
       </span>
       <DropdownMenu.ItemIndicator className="mt-0.5 shrink-0 text-accent-text">
-        <Check size={14} strokeWidth={2.25} />
+        <CheckIcon size={14} />
       </DropdownMenu.ItemIndicator>
     </DropdownMenu.RadioItem>
   );
@@ -154,7 +154,7 @@ export function MenuCheck(props: { checked: boolean; onChange: (checked: boolean
       </span>
       <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">
         <DropdownMenu.ItemIndicator className="text-accent-text">
-          <Check size={14} strokeWidth={2.25} />
+          <CheckIcon size={14} />
         </DropdownMenu.ItemIndicator>
       </span>
     </DropdownMenu.CheckboxItem>
@@ -204,7 +204,7 @@ export function Sheet(props: {
               aria-label="Close"
               className="-m-1 shrink-0 rounded-lg p-1 text-subtle transition-colors duration-100 hover:bg-hover hover:text-fg"
             >
-              <X size={16} />
+              <XIcon size={16} />
             </RDialog.Close>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{props.children}</div>

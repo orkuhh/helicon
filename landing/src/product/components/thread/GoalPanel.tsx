@@ -1,4 +1,4 @@
-import { ChevronDown, Pause, Play, Square, Target, X } from "lucide-react";
+import { CaretDownIcon, PauseIcon, PlayIcon, SquareIcon, TargetIcon, XIcon } from "../ui/icons";
 import { useMemo } from "react";
 import { shallowEqual, useApp, useController, useNow } from "../../app/context";
 import { formatDuration, formatTokens, relativeTime } from "../../model/format";
@@ -58,14 +58,14 @@ export function GoalPanel(props: { sessionId: string; running: boolean; readOnly
           onClick={() => controller.setCardOpen(cardKey, !open)}
           className="flex h-10 min-w-0 flex-1 items-center gap-2.5 pl-3.5 text-left"
         >
-          <Target size={15} className="shrink-0 text-subtle" />
+          <TargetIcon size={15} className="shrink-0 text-subtle" />
           <span className="text-sm font-medium text-fg">Goal</span>
           <span className={cn("shrink-0 rounded-md px-1.5 py-px text-2xs font-medium", PILL[view.tone])}>{view.label}</span>
           <span className="shrink-0 text-xs text-subtle tabular-nums">{Math.round(view.percent)}%</span>
           {!open ? <span className="min-w-0 truncate text-xs text-muted">{view.objective}</span> : null}
           <span className="flex-1" />
           {elapsed !== null ? <span className="shrink-0 text-xs text-subtle tabular-nums">{formatDuration(elapsed) || "0s"}</span> : null}
-          <ChevronDown size={14} className={cn("shrink-0 text-subtle transition-transform duration-200", !open && "-rotate-90")} />
+          <CaretDownIcon size={14} className={cn("shrink-0 text-subtle transition-transform duration-200", !open && "-rotate-90")} />
         </button>
         <CloseCard label="Hide the goal" onClose={() => controller.setCardHidden(cardKey, true)} />
       </div>
@@ -163,12 +163,12 @@ function GoalBody(props: { view: GoalView; elapsed: number | null; now: number; 
           {/* Pausing keeps the goal and stops Muse starting new work on it; stopping only ends the running turn. */}
           {view.tone === "active" ? (
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => void controller.goalAction(props.sessionId, "pause")}>
-              <Pause size={13} /> Pause goal
+              <PauseIcon size={13} /> Pause goal
             </Button>
           ) : null}
           {view.tone === "active" && props.running ? (
             <Button size="sm" variant="ghost" onClick={() => void controller.stop(props.sessionId)}>
-              <Square size={12} /> Stop turn
+              <SquareIcon size={12} /> Stop turn
             </Button>
           ) : null}
           {(view.tone === "paused" || view.tone === "attention") && !props.running ? (
@@ -178,7 +178,7 @@ function GoalBody(props: { view: GoalView; elapsed: number | null; now: number; 
               disabled={busy}
               onClick={() => void controller.continueGoal(props.sessionId, view.objective, view.status)}
             >
-              <Play size={13} /> {view.tone === "paused" ? "Resume goal" : "Keep going"}
+              <PlayIcon size={13} /> {view.tone === "paused" ? "Resume goal" : "Keep going"}
             </Button>
           ) : null}
           <Button size="sm" variant="ghost" onClick={newGoal}>
@@ -186,7 +186,7 @@ function GoalBody(props: { view: GoalView; elapsed: number | null; now: number; 
           </Button>
           {view.tone !== "done" && view.tone !== "ended" ? (
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => void controller.goalAction(props.sessionId, "clear")}>
-              <X size={13} /> Clear
+              <XIcon size={13} /> Clear
             </Button>
           ) : null}
         </div>

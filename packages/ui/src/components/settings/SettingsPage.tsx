@@ -1,11 +1,12 @@
-import { ArrowDownToLine, ArrowLeft, Minus, Plus, RefreshCw, RotateCw, ScrollText } from "lucide-react";
+import { ArrowClockwiseIcon, ArrowLeftIcon, ArrowLineDownIcon, ArrowSquareOutIcon, ArrowsClockwiseIcon, CheckCircleIcon, MinusIcon, PencilSimpleIcon, PlusIcon, ScrollIcon, SignInIcon, TrashIcon, WarningIcon } from "../ui/icons.js";
 import { Switch } from "radix-ui";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useApp, useController, useNow } from "../../app/context.js";
 import { useOverlayDragProps } from "../../app/frame.js";
 import { modelDisplayName } from "../../model/format.js";
-import { CODE_THEMES, ZOOM_MAX, ZOOM_MIN, type CodeTheme, type GroupBy, type ThemePref } from "../../model/store.js";
-import type { ApprovalMode, ReasoningEffort } from "../../types.js";
+import type { HeliconController } from "../../model/controller.js";
+import { CODE_THEMES, ZOOM_MAX, ZOOM_MIN, type AccountLoginState, type CodeTheme, type GroupBy, type ThemePref } from "../../model/store.js";
+import type { AccountView, ApprovalMode, ReasoningEffort } from "../../types.js";
 import { LEVELS, MODES } from "../composer/Composer.js";
 import { CODE_THEME_LABELS, updateSummary } from "../sidebar/Sidebar.js";
 import { Modal } from "../ui/overlays.js";
@@ -65,13 +66,15 @@ function Section(props: { title: string; children: ReactNode }) {
   );
 }
 
-function Row(props: { label: string; description?: string; children?: ReactNode }) {
+function Row(props: { label: ReactNode; description?: string; descriptionClassName?: string; children?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-t border-line px-4 py-3 first:border-t-0">
       {/* A floor on the label, or a wide row of choices squeezes it to one word per line instead of wrapping. */}
       <div className="min-w-[13rem] flex-1 basis-64">
         <p className="text-sm text-fg">{props.label}</p>
-        {props.description ? <p className="mt-0.5 text-xs text-pretty text-muted">{props.description}</p> : null}
+        {props.description ? (
+          <p className={cn("mt-0.5 text-xs text-pretty", props.descriptionClassName ?? "text-muted")}>{props.description}</p>
+        ) : null}
       </div>
       {props.children ? <div className="min-w-0 w-full @min-[520px]:w-auto">{props.children}</div> : null}
     </div>
@@ -99,11 +102,225 @@ const GROUPS: readonly { value: GroupBy; label: string }[] = [
   { value: "status", label: "Status" },
 ];
 
+const INPUT_CLASS =
+  "h-9 w-full rounded-lg border border-line bg-sunken px-3 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent";
+
+function AddAccountModal(props: { open: boolean; onOpenChange: (open: boolean) => void; controller: HeliconController }) {
+  const [id, setId] = useState("");
+  const [name, setName] = useState("");
+  const [seedFromDefault, setSeedFromDefault] = useState(false);
+
+  async function submit() {
+    const trimmedId = id.trim();
+    if (!trimmedId) return;
+    const ok = await props.controller.createAccount(trimmedId, name.trim() || undefined, seedFromDefault);
+    if (ok) {
+      setId("");
+      setName("");
+      setSeedFromDefault(false);
+      props.onOpenChange(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      title="Add account"
+      description="Separate logins for work, personal, or a client. Each runs under its own Muse profile."
+    >
+      <div className="mt-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted" htmlFor="account-add-id">
+            Account id
+          </label>
+          <input
+            id="account-add-id"
+            type="text"
+            value={id}
+            onChange={(event) => setId(event.target.value)}
+            placeholder="work"
+            className={INPUT_CLASS}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted" htmlFor="account-add-name">
+            Name
+          </label>
+          <input
+            id="account-add-name"
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Optional"
+            className={INPUT_CLASS}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm text-fg">Copy settings from the default login</p>
+          <Toggle checked={seedFromDefault} onChange={setSeedFromDefault} label="Copy settings from the default login" />
+        </div>
+      </div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" onClick={() => props.onOpenChange(false)}>
+          Cancel
+        </Button>
+        <Button variant="primary" disabled={!id.trim()} onClick={() => void submit()}>
+          Add account
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+function RenameAccountModal(props: { account: AccountView | null; onOpenChange: (open: boolean) => void; controller: HeliconController }) {
+  const [name, setName] = useState("");
+
+  useEffect(() => {
+    if (props.account) setName(props.account.name);
+  }, [props.account]);
+
+  async function submit() {
+    const account = props.account;
+    if (!account) return;
+    const ok = await props.controller.renameAccount(account.id, name);
+    if (ok) props.onOpenChange(false);
+  }
+
+  return (
+    <Modal open={props.account !== null} onOpenChange={props.onOpenChange} title="Rename account">
+      <div className="mt-4 flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted" htmlFor="account-rename-name">
+          Name
+        </label>
+        <input
+          id="account-rename-name"
+          type="text"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          className={INPUT_CLASS}
+        />
+      </div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" onClick={() => props.onOpenChange(false)}>
+          Cancel
+        </Button>
+        <Button variant="primary" disabled={!name.trim()} onClick={() => void submit()}>
+          Rename
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+function RemoveAccountModal(props: { account: AccountView | null; onOpenChange: (open: boolean) => void; controller: HeliconController }) {
+  async function submit() {
+    const account = props.account;
+    if (!account) return;
+    const ok = await props.controller.removeAccount(account.id);
+    if (ok) props.onOpenChange(false);
+  }
+
+  return (
+    <Modal
+      open={props.account !== null}
+      onOpenChange={props.onOpenChange}
+      title="Remove this account?"
+      description="The profile's local settings are deleted. Any threads that used it keep running under it until they end."
+    >
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" onClick={() => props.onOpenChange(false)}>
+          Cancel
+        </Button>
+        <Button variant="danger" onClick={() => void submit()}>
+          Remove account
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/** A button styled like `Button` `variant="primary" size="md"`, as an anchor so opening the device page is a real navigation. */
+function OpenLinkButton(props: { href: string; children: ReactNode }) {
+  return (
+    <a
+      href={props.href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex h-8 shrink-0 items-center justify-center gap-2 rounded-lg bg-inverse px-3 text-sm font-medium whitespace-nowrap text-inverse-fg transition-[background-color,color,opacity,transform] duration-150 ease-out hover:opacity-90 active:scale-[0.97]"
+    >
+      {props.children}
+    </a>
+  );
+}
+
+/** The device-code sign-in modal: a code to enter on Meta's own page, or a fallback message under WSL. */
+function DeviceLoginModal(props: { login: AccountLoginState | null; controller: HeliconController }) {
+  const login = props.login;
+  const isFallback = login !== null && "fallback" in login;
+  const isDone = login !== null && "status" in login && login.status === "done";
+
+  useEffect(() => {
+    if (!isDone) return;
+    const handle = setTimeout(() => props.controller.cancelLogin(), 1500);
+    return () => clearTimeout(handle);
+  }, [isDone, props.controller]);
+
+  return (
+    <Modal
+      open={login !== null}
+      onOpenChange={(open) => !open && props.controller.cancelLogin()}
+      title={isDone ? "Signed in" : "Log in with a device code"}
+    >
+      {login && isFallback ? (
+        <>
+          <p className="mt-4 text-sm text-fg">{login.fallback}</p>
+          <div className="mt-6 flex justify-end">
+            <Button variant="secondary" onClick={() => props.controller.cancelLogin()}>
+              Close
+            </Button>
+          </div>
+        </>
+      ) : null}
+      {login && !isFallback && "status" in login ? (
+        isDone ? (
+          <p className="mt-4 flex items-center gap-2 text-sm text-fg">
+            <CheckCircleIcon size={16} className="text-ok-text" /> Signed in.
+          </p>
+        ) : (
+          <div className="mt-4 flex flex-col gap-3">
+            {login.code ? (
+              <code className="self-start rounded-lg bg-sunken px-3 py-2 font-mono text-lg tabular-nums text-fg">{login.code}</code>
+            ) : (
+              <p className="text-sm text-subtle">Waiting for Muse to print the sign-in link…</p>
+            )}
+            <p className="text-sm text-muted">Open the sign-in page and enter this code.</p>
+            <p className="text-xs text-subtle">This window updates on its own once sign-in completes.</p>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => props.controller.cancelLogin()}>
+                Close
+              </Button>
+              {login.url ? (
+                <OpenLinkButton href={login.url}>
+                  <ArrowSquareOutIcon size={14} /> Open sign-in page
+                </OpenLinkButton>
+              ) : null}
+            </div>
+          </div>
+        )
+      ) : null}
+    </Modal>
+  );
+}
+
 /** Everything Helicon lets you set, in one place: the menus around the app are shortcuts into this. */
 export function SettingsPage() {
   const controller = useController();
   const prefs = useApp((s) => s.prefs);
   const models = useApp((s) => s.models);
+  const accounts = useApp((s) => s.accounts);
+  const metaApiKeyInherited = useApp((s) => s.metaApiKeyInherited);
+  const accountLogin = useApp((s) => s.accountLogin);
   const titleSettings = useApp((s) => s.titleSettings);
   const sandboxSettings = useApp((s) => s.sandboxSettings);
   const env = useApp((s) => s.env);
@@ -114,10 +331,17 @@ export function SettingsPage() {
   const yoloSettings = useApp((s) => s.yoloSettings);
   const [confirmSandbox, setConfirmSandbox] = useState(false);
   const [confirmYolo, setConfirmYolo] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [renaming, setRenaming] = useState<AccountView | null>(null);
+  const [removing, setRemoving] = useState<AccountView | null>(null);
   const now = useNow(60_000);
   const busy = updates?.status === "checking" || updates?.status === "downloading" || updates?.status === "installing";
   const drag = useOverlayDragProps();
   const collapsed = useApp((s) => s.prefs.sidebarCollapsed);
+
+  useEffect(() => {
+    void controller.loadAccounts();
+  }, [controller]);
 
   return (
     <div className="@container flex h-full min-w-0 flex-col">
@@ -125,7 +349,7 @@ export function SettingsPage() {
       <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
       <header {...drag} className="mx-auto flex w-full max-w-[720px] shrink-0 items-center gap-3 px-4 pt-8 pb-1 @min-[520px]:px-6">
         <Button size="sm" variant="ghost" onClick={() => controller.goBack()}>
-          <ArrowLeft size={14} /> Back
+          <ArrowLeftIcon size={14} /> Back
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-semibold text-fg">Settings</h1>
@@ -158,7 +382,7 @@ export function SettingsPage() {
           >
             <div className="flex items-center gap-1">
               <IconButton label="Zoom out" size="xs" onClick={() => controller.zoomOut()} disabled={prefs.zoom <= ZOOM_MIN}>
-                <Minus size={14} />
+                <MinusIcon size={14} />
               </IconButton>
               <button
                 type="button"
@@ -169,7 +393,7 @@ export function SettingsPage() {
                 {Math.round(prefs.zoom * 100)}%
               </button>
               <IconButton label="Zoom in" size="xs" onClick={() => controller.zoomIn()} disabled={prefs.zoom >= ZOOM_MAX}>
-                <Plus size={14} />
+                <PlusIcon size={14} />
               </IconButton>
             </div>
           </Row>
@@ -226,6 +450,47 @@ export function SettingsPage() {
               onChange={(value) => controller.setEffort(value)}
             />
           </Row>
+        </Section>
+
+        <Section title="Accounts">
+          {metaApiKeyInherited ? (
+            <Row
+              label={
+                <span className="inline-flex items-center gap-1.5">
+                  <WarningIcon size={14} className="text-warn-text" />
+                  Accounts share one login
+                </span>
+              }
+              description="META_API_KEY is set in Helicon's environment. Every account inherits it, so they all use the same Meta login. Unset it in your environment to keep accounts separate."
+              descriptionClassName="text-warn-text"
+            />
+          ) : null}
+          <Row label="Add account" description="Separate logins for work, personal, or a client. Each runs under its own Muse profile.">
+            {accounts === null ? (
+              <p className="text-xs text-subtle">Loading…</p>
+            ) : (
+              <Button size="sm" variant="secondary" onClick={() => setAddOpen(true)}>
+                <PlusIcon size={13} /> Add account
+              </Button>
+            )}
+          </Row>
+          {accounts?.map((account) => (
+            <Row key={account.id} label={account.name} description={account.hasLogin ? (account.email ?? "Signed in") : "Not signed in"}>
+              <div className="flex items-center gap-2">
+                {!account.hasLogin ? (
+                  <Button size="sm" variant="secondary" onClick={() => void controller.beginLogin(account.id)}>
+                    <SignInIcon size={13} /> Log in
+                  </Button>
+                ) : null}
+                <Button size="sm" variant="secondary" onClick={() => setRenaming(account)}>
+                  <PencilSimpleIcon size={13} /> Rename
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setRemoving(account)}>
+                  <TrashIcon size={13} /> Remove account
+                </Button>
+              </div>
+            </Row>
+          ))}
         </Section>
 
         <Section title="Threads list">
@@ -354,16 +619,16 @@ export function SettingsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 {updates.status === "ready" ? (
                   <Button size="sm" variant="primary" onClick={() => controller.restartToUpdate()}>
-                    <RotateCw size={13} /> Restart to update
+                    <ArrowClockwiseIcon size={13} /> Restart to update
                   </Button>
                 ) : null}
                 {updates.status === "available" ? (
                   <Button size="sm" variant="secondary" onClick={() => controller.downloadUpdate()}>
-                    <ArrowDownToLine size={13} /> Download
+                    <ArrowLineDownIcon size={13} /> Download
                   </Button>
                 ) : null}
                 <Button size="sm" variant="secondary" disabled={busy} onClick={() => controller.checkForUpdates()}>
-                  <RefreshCw size={13} className={cn(updates.status === "checking" && "animate-spin")} /> Check now
+                  <ArrowsClockwiseIcon size={13} className={cn(updates.status === "checking" && "animate-spin")} /> Check now
                 </Button>
               </div>
             </Row>
@@ -380,7 +645,7 @@ export function SettingsPage() {
         <Section title="Environment">
           <Row label="What's new" description="The release notes for this version, as they appear after Helicon updates itself.">
             <Button size="sm" variant="secondary" onClick={() => controller.setWhatsNewOpen(true)}>
-              <ScrollText size={13} /> Read
+              <ScrollIcon size={13} /> Read
             </Button>
           </Row>
           <Fact label="Helicon" value={env?.version ?? "Unknown"} />
@@ -462,6 +727,11 @@ export function SettingsPage() {
           </Button>
         </div>
       </Modal>
+
+      <AddAccountModal open={addOpen} onOpenChange={setAddOpen} controller={controller} />
+      <RenameAccountModal account={renaming} onOpenChange={(open) => !open && setRenaming(null)} controller={controller} />
+      <RemoveAccountModal account={removing} onOpenChange={(open) => !open && setRemoving(null)} controller={controller} />
+      <DeviceLoginModal login={accountLogin} controller={controller} />
     </div>
   );
 }

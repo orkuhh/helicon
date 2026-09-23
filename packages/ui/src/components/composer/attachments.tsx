@@ -1,4 +1,4 @@
-import { FileText, Paperclip, X } from "lucide-react";
+import { FileTextIcon, PaperclipIcon, XIcon } from "../ui/icons.js";
 import { useEffect, useState } from "react";
 import type { AttachmentView, OutgoingAttachment } from "../../types.js";
 import type { EchoAttachment } from "../../model/fold.js";
@@ -164,7 +164,7 @@ export function AttachmentTray(props: { files: PendingFile[]; onRemove: (id: str
               </button>
             ) : (
               <div className="flex h-16 max-w-[220px] items-center gap-2 rounded-xl bg-sunken px-3 shadow-[0_0_0_1px_var(--border)]">
-                <FileText size={15} className="shrink-0 text-subtle" />
+                <FileTextIcon size={15} className="shrink-0 text-subtle" />
                 <div className="min-w-0">
                   <p className="truncate text-xs font-medium text-fg">{file.name}</p>
                   <p className="text-2xs text-subtle">{formatSize(file.size)}</p>
@@ -177,7 +177,7 @@ export function AttachmentTray(props: { files: PendingFile[]; onRemove: (id: str
               onClick={() => props.onRemove(file.id)}
               className="absolute -top-1.5 -right-1.5 inline-flex size-5 items-center justify-center rounded-full bg-inverse text-inverse-fg opacity-0 shadow-pop transition-opacity duration-100 group-hover/att:opacity-100 focus-visible:opacity-100"
             >
-              <X size={11} strokeWidth={2.5} />
+              <XIcon size={11} />
             </button>
           </li>
         ))}
@@ -209,7 +209,7 @@ export function SentAttachments(props: { files: (AttachmentView | EchoAttachment
               </button>
             ) : (
               <span className="inline-flex items-center gap-1.5 rounded-lg bg-sunken px-2.5 py-1.5 text-xs text-muted shadow-[0_0_0_1px_var(--border)]">
-                <FileText size={13} className="shrink-0 text-subtle" />
+                <FileTextIcon size={13} className="shrink-0 text-subtle" />
                 {file.name}
               </span>
             )}
@@ -256,7 +256,7 @@ export function AttachButton(props: { onFiles: (files: FileList) => void; disabl
       )}
     >
       <span className="sr-only">Attach files</span>
-      <Paperclip size={14} />
+      <PaperclipIcon size={14} />
       <input
         type="file"
         multiple

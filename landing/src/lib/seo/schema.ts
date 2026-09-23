@@ -30,6 +30,12 @@ export function coreNodes(version: string | null): Json[] {
       inLanguage: "en",
       publisher: { "@id": IDS.publisher },
       about: { "@id": IDS.app },
+      // /search renders on the server from ?q=, so this is a real endpoint, not a promise.
+      potentialAction: {
+        "@type": "SearchAction",
+        target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/search?q={search_term_string}` },
+        "query-input": "required name=search_term_string",
+      },
     },
     {
       "@type": "Person",

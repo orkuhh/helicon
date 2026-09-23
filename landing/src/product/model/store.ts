@@ -246,6 +246,10 @@ export interface AppState {
   planUsage: PlanUsage | null;
   /** Every account Helicon can run; null until the first load answers. */
   accounts: import("../types").AccountView[] | null;
+  /** True when META_API_KEY in Helicon's environment makes every account share one Meta login. */
+  metaApiKeyInherited: boolean;
+  /** The in-app device-code login in progress, if any; null once closed or never started. */
+  accountLogin: AccountLoginState | null;
   /** The plan window per account, from `GET /api/plan-usage` and the `plan-usage` event. */
   planUsageByAccount: import("../types").PlanUsageByAccount;
   /** Each thread's file viewer. */
@@ -259,7 +263,12 @@ export interface AppState {
 }
 
 /** `confirmFullAccess` is the full-access confirmation, which `/permissions full` must still pass through. */
-export type ComposerPicker = "model" | "effort" | "permissions" | "confirmFullAccess" | "confirmBypass" | "confirmYolo";
+export type ComposerPicker = "model" | "effort" | "permissions" | "confirmFullAccess" | "confirmBypass" | "confirmYolo" | "account";
+
+/** The device-code login modal's state: a device prompt waiting or done, or a runtime fallback message. */
+export type AccountLoginState =
+  | { accountId: string; url: string; code: string | null; status: "waiting" | "done" }
+  | { accountId: string; fallback: string };
 
 export interface SkillsState {
   status: "loading" | "ready" | "error";
@@ -296,6 +305,8 @@ export function initialState(prefs: Prefs): AppState {
     hostError: null,
     planUsage: null,
     accounts: null,
+    metaApiKeyInherited: false,
+    accountLogin: null,
     planUsageByAccount: {},
     filePanels: {},
     fileDrafts: {},

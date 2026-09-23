@@ -1,4 +1,4 @@
-import { Archive, CircleStop, Code, Copy, Ellipsis, Folder, FolderOpen, FolderTree, Globe, PanelBottomOpen, GitBranch, Lock, Minimize2, Pencil, ShieldOff, Square, SquarePen } from "lucide-react";
+import { ArchiveIcon, ArrowsInIcon, CodeIcon, CopyIcon, DotsThreeIcon, FolderIcon, FolderOpenIcon, GitBranchIcon, GlobeIcon, LockIcon, NotePencilIcon, PencilSimpleIcon, ShieldSlashIcon, SquareHalfBottomIcon, SquareIcon, StopCircleIcon, TreeStructureIcon } from "../ui/icons.js";
 import { useRef, useState, type KeyboardEvent } from "react";
 import { useApp, useController, useNow } from "../../app/context.js";
 import { CaptionSpacer, useOverlayDragProps } from "../../app/frame.js";
@@ -89,7 +89,7 @@ function ThreadHeader(props: { session: SessionSummary; thread: ThreadState | nu
         </span>
         {fold?.meta.branch ? (
           <span className="hidden min-w-0 items-center gap-1 text-xs text-subtle lg:flex">
-            <GitBranch size={12} className="shrink-0" />
+            <GitBranchIcon size={12} className="shrink-0" />
             <span className="truncate font-mono text-2xs">{fold.meta.branch}</span>
           </span>
         ) : null}
@@ -97,7 +97,7 @@ function ThreadHeader(props: { session: SessionSummary; thread: ThreadState | nu
       {session.sandboxDisabled === true ? (
         <Tip label="This thread started while sandboxing was switched off, so its shells run unconfined">
           <span className="flex shrink-0 items-center gap-1.5 px-1 text-xs font-medium text-warn-text">
-            <ShieldOff size={12} aria-hidden="true" />
+            <ShieldSlashIcon size={12} aria-hidden="true" />
             <span className="sr-only">Sandbox off</span>
             <span aria-hidden="true" className="@max-[420px]:hidden">Sandbox off</span>
           </span>
@@ -116,32 +116,32 @@ function ThreadHeader(props: { session: SessionSummary; thread: ThreadState | nu
         </span>
       ) : thread?.readOnly ? (
         <span className="flex shrink-0 items-center gap-1.5 px-1 text-xs text-subtle">
-          <Lock size={12} />
+          <LockIcon size={12} />
           <span className="@max-[420px]:hidden">Read-only</span>
         </span>
       ) : null}
       {props.running ? (
         <Tip label="Stop the turn" shortcut={["Esc"]}>
           <IconButton label="Stop the turn" onClick={() => void controller.stop(session.sessionId)}>
-            <Square size={11} className="fill-current" />
+            <SquareIcon weight="fill" size={11} />
           </IconButton>
         </Tip>
       ) : null}
       <HiddenCardsButton sessionId={session.sessionId} running={props.running} />
       <Tip label={browserOpen ? "Hide browser" : "Show browser"} shortcut={[MOD, "Shift", "B"]}>
         <IconButton label={browserOpen ? "Hide browser" : "Show browser"} active={browserOpen} onClick={() => controller.toggleBrowser()}>
-          <Globe size={16} />
+          <GlobeIcon size={16} />
         </IconButton>
       </Tip>
       <Tip label={filesOpen ? "Hide files" : "Show files"} shortcut={[MOD, "Shift", "E"]}>
         <IconButton label={filesOpen ? "Hide files" : "Show files"} active={filesOpen} onClick={() => controller.toggleFiles()}>
-          <FolderTree size={15} />
+          <TreeStructureIcon size={15} />
         </IconButton>
       </Tip>
       <span className="@max-[360px]:hidden">
         <Tip label="Open in VS Code">
           <IconButton label="Open in VS Code" onClick={() => void controller.openFolder(session.cwd, "editor")}>
-            <Code size={15} />
+            <CodeIcon size={15} />
           </IconButton>
         </Tip>
       </span>
@@ -149,25 +149,25 @@ function ThreadHeader(props: { session: SessionSummary; thread: ThreadState | nu
         <Tip label="More">
           <MenuTrigger asChild>
             <IconButton label="Thread actions">
-              <Ellipsis size={16} />
+              <DotsThreeIcon size={16} />
             </IconButton>
           </MenuTrigger>
         </Tip>
         <MenuContent align="end">
-          <MenuItem icon={<Pencil size={14} />} onSelect={() => setRenaming(true)}>
+          <MenuItem icon={<PencilSimpleIcon size={14} />} onSelect={() => setRenaming(true)}>
             Rename
           </MenuItem>
-          <MenuItem icon={<Minimize2 size={14} />} onSelect={() => void controller.compact(session.sessionId)} disabled={thread?.readOnly}>
+          <MenuItem icon={<ArrowsInIcon size={14} />} onSelect={() => void controller.compact(session.sessionId)} disabled={thread?.readOnly}>
             Compact context
           </MenuItem>
-          <MenuItem icon={<FolderOpen size={14} />} onSelect={() => void controller.openFolder(session.cwd, "files")}>
+          <MenuItem icon={<FolderOpenIcon size={14} />} onSelect={() => void controller.openFolder(session.cwd, "files")}>
             {revealLabel()}
           </MenuItem>
-          <MenuItem icon={<Copy size={14} />} onSelect={() => void navigator.clipboard?.writeText(session.sessionId)}>
+          <MenuItem icon={<CopyIcon size={14} />} onSelect={() => void navigator.clipboard?.writeText(session.sessionId)}>
             Copy session ID
           </MenuItem>
           <MenuSeparator />
-          <MenuItem icon={<Archive size={14} />} onSelect={() => void controller.archive(session.sessionId)}>
+          <MenuItem icon={<ArchiveIcon size={14} />} onSelect={() => void controller.archive(session.sessionId)}>
             Archive thread
           </MenuItem>
         </MenuContent>
@@ -187,18 +187,18 @@ function ProjectChip(props: { cwd: string }) {
           className="flex min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-subtle transition-colors hover:bg-hover hover:text-fg data-[state=open]:bg-hover"
           title={props.cwd}
         >
-          <Folder size={12} className="shrink-0" />
+          <FolderIcon size={12} className="shrink-0" />
           <span className="truncate">{basename(props.cwd)}</span>
         </button>
       </MenuTrigger>
       <MenuContent>
-        <MenuItem icon={<SquarePen size={14} />} onSelect={() => controller.newThread(props.cwd)}>
+        <MenuItem icon={<NotePencilIcon size={14} />} onSelect={() => controller.newThread(props.cwd)}>
           New thread in {basename(props.cwd)}
         </MenuItem>
-        <MenuItem icon={<FolderOpen size={14} />} onSelect={() => void controller.openFolder(props.cwd, "files")}>
+        <MenuItem icon={<FolderOpenIcon size={14} />} onSelect={() => void controller.openFolder(props.cwd, "files")}>
           {revealLabel()}
         </MenuItem>
-        <MenuItem icon={<Code size={14} />} onSelect={() => void controller.openFolder(props.cwd, "editor")}>
+        <MenuItem icon={<CodeIcon size={14} />} onSelect={() => void controller.openFolder(props.cwd, "editor")}>
           Open in VS Code
         </MenuItem>
       </MenuContent>
@@ -265,7 +265,7 @@ function HiddenCardsButton(props: { sessionId: string; running: boolean }) {
   return (
     <Tip label={label}>
       <IconButton label={label} onClick={() => controller.showThreadCards(props.sessionId)}>
-        <PanelBottomOpen size={15} />
+        <SquareHalfBottomIcon size={15} />
       </IconButton>
     </Tip>
   );
@@ -340,7 +340,7 @@ function BackgroundTasks(props: { sessionId: string }) {
         {count === 1 ? "1 task is running in the background" : `${count} tasks are running in the background`}
       </span>
       <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" loading={busy} onClick={() => void controller.taskAction(props.sessionId, "stopAll")}>
-        <CircleStop size={12} /> Stop all
+        <StopCircleIcon size={12} /> Stop all
       </Button>
       <CloseCard label="Hide background tasks" onClose={() => controller.setCardHidden(`tasks:${props.sessionId}`, true)} />
     </div>

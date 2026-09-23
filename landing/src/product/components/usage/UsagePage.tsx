@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeftIcon } from "../ui/icons";
 import { useEffect, useMemo, useState } from "react";
 import { useApp, useController } from "../../app/context";
 import { useOverlayDragProps } from "../../app/frame";
@@ -8,7 +8,7 @@ import { fillUsageDays, rangeLabel, USAGE_RANGES } from "../../model/usage-range
 import type { ModelOption, UsageBucket, UsageReport, UsageThread } from "../../types";
 import { Button, Spinner, cn } from "../ui/primitives";
 import { TopBar } from "../chrome";
-import { PlanMeter } from "./PlanMeter";
+import { AccountMeters, PlanMeter } from "./PlanMeter";
 import { Tip } from "../ui/overlays";
 
 /** One colour per model, in the order they appear; the accent leads and the rest step away from it. */
@@ -66,7 +66,7 @@ export function UsagePage() {
       <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
       <header {...drag} className="mx-auto flex w-full max-w-[980px] shrink-0 flex-wrap items-center gap-3 px-4 pt-6 pb-4 @min-[520px]:px-6 sm:pt-8">
         <Button size="sm" variant="ghost" onClick={() => controller.goBack()}>
-          <ArrowLeft size={14} /> Back
+          <ArrowLeftIcon size={14} /> Back
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-semibold text-fg">Usage</h1>
@@ -93,6 +93,7 @@ export function UsagePage() {
         <div className="mb-6">
           <PlanMeter />
         </div>
+        <AccountMeters />
         {error ? (
           <p className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger-text">{error}</p>
         ) : !view ? (

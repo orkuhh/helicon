@@ -1,6 +1,6 @@
 // via beUI AnimatedToastStack (beui.dev), MIT (c) 2026 Saurabh Chauhan.
 // Adapted: driven by the Helicon store, project tokens, no backdrop blur, chronological stack.
-import { Check, CircleAlert, Info, X } from "lucide-react";
+import { CheckIcon, InfoIcon, WarningCircleIcon, XIcon } from "./icons.js";
 import { AnimatePresence, motion, useReducedMotion, type Transition } from "motion/react";
 import { useApp, useController } from "../../app/context.js";
 import type { Toast } from "../../model/store.js";
@@ -10,9 +10,9 @@ const STACK_SPRING: Transition = { type: "spring", stiffness: 420, damping: 34, 
 const EASE_OUT: [number, number, number, number] = [0.23, 1, 0.32, 1];
 
 const TONE: Record<Toast["tone"], { icon: JSX.Element; className: string }> = {
-  error: { icon: <CircleAlert size={14} />, className: "bg-danger-soft text-danger-text" },
-  success: { icon: <Check size={14} strokeWidth={2.5} />, className: "bg-[color-mix(in_oklch,var(--ok)_16%,transparent)] text-ok-text" },
-  info: { icon: <Info size={14} />, className: "bg-active text-muted" },
+  error: { icon: <WarningCircleIcon size={14} />, className: "bg-danger-soft text-danger-text" },
+  success: { icon: <CheckIcon size={14} />, className: "bg-[color-mix(in_oklch,var(--ok)_16%,transparent)] text-ok-text" },
+  info: { icon: <InfoIcon size={14} />, className: "bg-active text-muted" },
 };
 
 export function Toasts() {
@@ -77,7 +77,7 @@ export function Toasts() {
                 onClick={() => controller.dismissToast(toast.id)}
                 className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-subtle transition-colors hover:bg-hover hover:text-fg"
               >
-                <X size={14} />
+                <XIcon size={14} />
               </button>
             </div>
           </motion.li>

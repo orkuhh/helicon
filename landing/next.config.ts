@@ -30,13 +30,15 @@ const nextConfig: NextConfig = {
       { source: "/alternatives", destination: "/compare", permanent: true },
       { source: "/vs/:slug", destination: "/compare/:slug", permanent: true },
       { source: "/releases", destination: "/changelog", permanent: true },
+      { source: "/feed.xml", destination: "/atom.xml", permanent: true },
+      { source: "/feed", destination: "/atom.xml", permanent: true },
     ];
   },
   async headers() {
     return [
       {
         // The machine-readable surfaces are meant to be fetched by tools on other origins.
-        source: "/:path(llms.txt|llms-full.txt|agents.md|facts.json|openapi.json|sitemap.xml)",
+        source: "/:path(llms.txt|llms-full.txt|agents.md|facts.json|openapi.json|sitemap.xml|rss.xml|atom.xml|search-index.json)",
         headers: [
           { key: "Access-Control-Allow-Origin", value: "*" },
           { key: "X-Robots-Tag", value: "index, follow" },

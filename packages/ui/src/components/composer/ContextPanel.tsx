@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { CaretDownIcon, CaretRightIcon } from "../ui/icons.js";
 import { Popover } from "radix-ui";
 import { useMemo, useState, type ReactNode } from "react";
 import { shallowEqual, useApp, useController } from "../../app/context.js";
@@ -123,7 +123,7 @@ function ContextPanel(props: { sessionId: string }) {
           <span className="text-xs text-muted tabular-nums">
             {formatTokens(breakdown.used)} / {formatTokens(breakdown.window)} ({share(breakdown.used, breakdown.window)})
           </span>
-          <ChevronDown size={14} className={cn("shrink-0 text-subtle transition-transform duration-150 ease-out", expanded && "rotate-180")} />
+          <CaretDownIcon size={14} className={cn("shrink-0 text-subtle transition-transform duration-150 ease-out", expanded && "rotate-180")} />
         </button>
         <SegmentBar breakdown={breakdown} />
         <Collapse open={expanded}>
@@ -232,7 +232,7 @@ function Group(props: { label: string; total: string; count: string; rows: { key
         onClick={() => setOpen((value) => !value)}
         className="-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs transition-colors duration-100 hover:bg-hover"
       >
-        <ChevronRight size={12} className={cn("size-2.5 shrink-0 text-subtle transition-transform duration-150 ease-out", open && "rotate-90")} />
+        <CaretRightIcon size={12} className={cn("size-2.5 shrink-0 text-subtle transition-transform duration-150 ease-out", open && "rotate-90")} />
         <span className="min-w-0 flex-1 truncate text-fg">{props.label}</span>
         <span className="w-16 shrink-0 text-right text-muted tabular-nums">{props.total}</span>
         <span className="w-12 shrink-0 text-right text-muted tabular-nums">{props.count}</span>

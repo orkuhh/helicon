@@ -1,4 +1,4 @@
-import { ArrowLeft, CornerLeftUp, Folder, FolderPlus, Link } from "lucide-react";
+import { ArrowElbowLeftUpIcon, ArrowLeftIcon, FolderIcon, FolderPlusIcon, LinkIcon } from "../ui/icons";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useApp, useController } from "../../app/context";
 import { errorMessage } from "../../client";
@@ -73,8 +73,8 @@ function GitHubMark() {
 }
 
 const SOURCES: { id: "local" | Provider; label: string; description: string; icon: ReactNode }[] = [
-  { id: "local", label: "Local folder", description: "Browse a folder on disk", icon: <FolderPlus size={17} /> },
-  { id: "git", label: "Git URL", description: "Clone from a remote URL", icon: <Link size={17} /> },
+  { id: "local", label: "Local folder", description: "Browse a folder on disk", icon: <FolderPlusIcon size={17} /> },
+  { id: "git", label: "Git URL", description: "Clone from a remote URL", icon: <LinkIcon size={17} /> },
   { id: "github", label: "GitHub repository", description: "Clone GitHub owner/repo", icon: <GitHubMark /> },
 ];
 
@@ -89,7 +89,7 @@ function Sources(props: { onPick: (id: "local" | Provider) => void; onPath: (pat
   const listId = useId();
   const url = value.trim() ? cloneUrl(value) : null;
   const rows: { id: "local" | Provider | "clone"; label: string; description: string; icon: ReactNode }[] = url
-    ? [{ id: "clone", label: `Clone ${url}`, description: "Next, pick where to clone it", icon: <Link size={17} /> }]
+    ? [{ id: "clone", label: `Clone ${url}`, description: "Next, pick where to clone it", icon: <LinkIcon size={17} /> }]
     : SOURCES;
   const active = Math.min(highlight, rows.length - 1);
   const pick = (id: (typeof rows)[number]["id"]) => {
@@ -118,7 +118,7 @@ function Sources(props: { onPick: (id: "local" | Provider) => void; onPath: (pat
   };
   return (
     <>
-      <Header icon={<FolderPlus size={17} />}>
+      <Header icon={<FolderPlusIcon size={17} />}>
         <input
           autoFocus
           value={value}
@@ -456,12 +456,12 @@ function FolderBrowser(props: { initial: string; clone: string | null; onBack: (
             >
               {row.kind === "up" ? (
                 <>
-                  <CornerLeftUp size={16} className="shrink-0 text-muted" />
+                  <ArrowElbowLeftUpIcon size={16} className="shrink-0 text-muted" />
                   <span className="text-muted">..</span>
                 </>
               ) : (
                 <>
-                  <Folder size={16} className="shrink-0 text-muted" />
+                  <FolderIcon size={16} className="shrink-0 text-muted" />
                   <span className="truncate">
                     <span className="font-semibold">{row.name.slice(0, leaf.length)}</span>
                     {row.name.slice(leaf.length)}
@@ -511,7 +511,7 @@ function Header(props: { onBack?: () => void; icon?: ReactNode; action?: ReactNo
           onClick={props.onBack}
           className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-hover hover:text-fg"
         >
-          <ArrowLeft size={17} />
+          <ArrowLeftIcon size={17} />
         </button>
       ) : (
         <span className="w-2" />

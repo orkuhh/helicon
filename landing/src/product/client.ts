@@ -119,6 +119,10 @@ export interface HeliconClient {
   removeAccount(id: string): Promise<void>;
   /** Sets which account new threads in a project default to; null clears it. */
   setProjectDefaultAccount(cwd: string, accountId: string | null): Promise<void>;
+  /** Whether META_API_KEY in the environment makes every account share one Meta login. */
+  accountsHealth(): Promise<{ metaApiKeyInherited: boolean }>;
+  /** Starts a device-code sign-in for an account; a WSL runtime returns a fallback instead of a link. */
+  loginAccount(id: string): Promise<{ url: string; code: string | null } | { fallback: string }>;
   getYoloSettings(): Promise<YoloSettings>;
   setYoloSettings(patch: { enabled?: boolean }): Promise<YoloSettings>;
   setSessionModel(sessionId: string, modelId: string): Promise<void>;

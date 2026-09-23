@@ -1,4 +1,4 @@
-import { PanelLeftOpen } from "lucide-react";
+import { SidebarSimpleIcon } from "./ui/icons";
 import type { ReactNode } from "react";
 import { useApp, useController } from "../app/context";
 import { CaptionSpacer, useOverlayDragProps, useTitlebarOverlay } from "../app/frame";
@@ -14,7 +14,7 @@ export function SidebarToggle() {
   return (
     <Tip label="Show sidebar" shortcut={[MOD, "B"]}>
       <IconButton label="Show sidebar" onClick={() => controller.toggleSidebar()}>
-        <PanelLeftOpen size={16} />
+        <SidebarSimpleIcon size={16} />
       </IconButton>
     </Tip>
   );

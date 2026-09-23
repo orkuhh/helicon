@@ -70,6 +70,6 @@ Below the recording, the app windows are the real Helicon UI, not screenshots:
 ## Sources
 
 - Type: Mona Sans (landing), Inter, Newsreader and JetBrains Mono (product faces for the demos).
-- Icons: Phosphor on the landing page; the demos keep the product's Lucide icons.
+- Icons: Phosphor everywhere: the landing page, the product demos (bold, set in the product's `ControllerProvider`) and the platform logos in `src/components/os-logos.tsx` (fill). The video play button keeps a hand-drawn triangle whose centroid, not its bounding box, is centred in the circle.
 - Button styling adapted from shadcn/ui Button (MIT).
 - `legacy/` keeps the previous static page for reference.

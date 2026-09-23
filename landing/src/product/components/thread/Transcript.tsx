@@ -1,4 +1,4 @@
-import { ArrowDown, ChevronRight, CircleAlert, RotateCcw, Square, SquarePen, SquareTerminal, X } from "lucide-react";
+import { ArrowCounterClockwiseIcon, ArrowDownIcon, CaretRightIcon, NotePencilIcon, SquareIcon, TerminalWindowIcon, WarningCircleIcon, XIcon } from "../ui/icons";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useStickToBottom } from "use-stick-to-bottom";
 import { useApp, useController, useNow } from "../../app/context";
@@ -185,7 +185,7 @@ export function Transcript(props: { sessionId: string; thread: ThreadState }) {
               onClick={() => void scrollToBottom()}
               className="enter-up pointer-events-auto inline-flex h-8 items-center gap-1.5 rounded-full bg-raised px-3 text-xs font-medium text-muted shadow-pop hover:text-fg"
             >
-              <ArrowDown size={13} /> Latest
+              <ArrowDownIcon size={13} /> Latest
             </button>
           </div>
         ) : null}
@@ -257,7 +257,7 @@ const TurnBlock = memo(
         {failed && !props.isLast ? (
           // A failure the thread has since moved past stays in the record, but quietly.
           <p className="flex min-w-0 items-center gap-1.5 text-xs text-subtle">
-            <CircleAlert size={12} className="shrink-0 text-danger" />
+            <WarningCircleIcon size={12} className="shrink-0 text-danger" />
             <span className="shrink-0">Failed</span>
             <span aria-hidden="true">·</span>
             <span className="min-w-0 truncate" title={info?.error?.message ?? undefined}>
@@ -277,7 +277,7 @@ const TurnBlock = memo(
         ) : null}
         {cancelled ? (
           <p className="flex items-center gap-1.5 text-xs text-subtle">
-            <Square size={11} className="fill-current" /> Stopped
+            <SquareIcon weight="fill" size={11} /> Stopped
             {info?.durationMs ? <span className="tabular-nums">after {formatDuration(info.durationMs)}</span> : null}
           </p>
         ) : null}
@@ -419,7 +419,7 @@ function WorkLog(props: { turn: TurnView; gates: GateMap; answers: AnswerMap; se
         onClick={() => setOpen((v) => !v)}
         className="group/log -mx-1.5 flex h-8 max-w-full min-w-0 items-center gap-2 overflow-hidden rounded-lg px-1.5 text-sm text-subtle transition-colors duration-100 hover:bg-hover hover:text-muted"
       >
-        <ChevronRight size={13} strokeWidth={2.2} className={cn("shrink-0 transition-transform duration-200 ease-out", open && "rotate-90")} />
+        <CaretRightIcon size={13} className={cn("shrink-0 transition-transform duration-200 ease-out", open && "rotate-90")} />
         <span className="shrink-0">{duration !== null ? `Worked for ${formatDuration(duration)}` : "Work log"}</span>
         {summary ? (
           <>
@@ -605,7 +605,7 @@ function ShellRunRow(props: { run: ShellRun; sessionId: string }) {
   return (
     <section className="enter-up flex flex-col gap-1.5" aria-label={`Command ${run.command}`}>
       <div className="flex items-center gap-2">
-        <SquareTerminal size={14} className="shrink-0 text-subtle" />
+        <TerminalWindowIcon size={14} className="shrink-0 text-subtle" />
         <span className="shrink-0 text-xs text-muted">You ran</span>
         <code className="min-w-0 flex-1 truncate rounded-md bg-sunken px-1.5 py-0.5 font-mono text-xs text-fg">{run.command}</code>
         {failed ? <span className="shrink-0 text-xs text-danger-text">Exit {run.exitCode ?? "?"}</span> : null}
@@ -694,7 +694,7 @@ function TurnError(props: {
   };
   return (
     <div className="flex items-start gap-3 rounded-xl bg-danger-soft px-3.5 py-3" role="alert">
-      <CircleAlert size={16} className="mt-0.5 shrink-0 text-danger" />
+      <WarningCircleIcon size={16} className="mt-0.5 shrink-0 text-danger" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-fg">{stuck ? "This thread cannot go on as it is" : "This turn failed"}</p>
         <p className="mt-0.5 text-sm break-words text-muted">{stuck ? stuck.message : props.message}</p>
@@ -725,11 +725,11 @@ function TurnError(props: {
           >
             {stuck.remedy === "compact" ? (
               <>
-                <RotateCcw size={13} /> {props.prompt ? "Compact and retry" : "Compact this thread"}
+                <ArrowCounterClockwiseIcon size={13} /> {props.prompt ? "Compact and retry" : "Compact this thread"}
               </>
             ) : (
               <>
-                <SquarePen size={13} /> Start a fresh thread
+                <NotePencilIcon size={13} /> Start a fresh thread
               </>
             )}
           </Button>
@@ -745,7 +745,7 @@ function TurnError(props: {
               void controller.compactAndRetry(props.sessionId, null);
             }}
           >
-            <RotateCcw size={13} /> Compact the thread
+            <ArrowCounterClockwiseIcon size={13} /> Compact the thread
           </Button>
         </Tip>
       ) : props.prompt && props.retryable ? (
@@ -755,13 +755,13 @@ function TurnError(props: {
             variant="secondary"
             onClick={() => again((files) => controller.retryTurn(props.sessionId, props.prompt as string, files))}
           >
-            <RotateCcw size={13} /> Retry
+            <ArrowCounterClockwiseIcon size={13} /> Retry
           </Button>
         </Tip>
       ) : null}
       <Tip label="Dismiss">
         <IconButton size="sm" label="Dismiss this error" className="-mt-0.5 -mr-1 shrink-0" onClick={() => controller.dismissTurnError(props.sessionId, props.turnId)}>
-          <X size={13} />
+          <XIcon size={13} />
         </IconButton>
       </Tip>
     </div>
@@ -772,7 +772,7 @@ function LoadError(props: { sessionId: string; message: string | null }) {
   const controller = useController();
   return (
     <div className="flex items-start gap-3 rounded-xl bg-danger-soft px-3.5 py-3" role="alert">
-      <CircleAlert size={16} className="mt-0.5 shrink-0 text-danger" />
+      <WarningCircleIcon size={16} className="mt-0.5 shrink-0 text-danger" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-fg">Could not open this thread</p>
         <p className="mt-0.5 text-sm break-words text-muted">{props.message ?? "Muse did not answer."}</p>

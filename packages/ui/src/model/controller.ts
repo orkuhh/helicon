@@ -204,6 +204,10 @@ const SKILLS_FRESH_MS = 60_000;
 const SKILLS_RETRY_MS = 10_000;
 /** How often loaded threads are checked for a stream that went silent. */
 const STALE_CHECK_MS = 30_000;
+/** How often an in-progress device-code login checks whether the account has signed in. */
+const LOGIN_POLL_MS = 2_000;
+/** Gives up polling after this many attempts (two minutes at `LOGIN_POLL_MS`); the modal stays open. */
+const LOGIN_POLL_MAX_ATTEMPTS = 60;
 /** A fold still showing a turn the server finished this long ago missed its ending: reload it. */
 const DIVERGED_GRACE_MS = 30_000;
 /** Both sides agree a turn is running, but nothing landed for this long: reload it. */
@@ -295,6 +299,11 @@ export class HeliconController {
   private accountsChain: Promise<void> = Promise.resolve();
   /** Bumped by every project-default-account request, so only the latest completion or rollback lands. */
   private projectDefaultRev = 0;
+  /** Bumped by every `beginLogin`/`cancelLogin`, so a stale in-flight login never overwrites a newer one. */
+  private loginRev = 0;
+  /** The scheduled next poll tick for an in-progress device-code login, if one is pending. */
+  private loginPollHandle: unknown = null;
+  private loginPollAttempts = 0;
   /** Approval modes from before YOLO was armed, restored when it is switched off. Null when never armed here. */
   private preYolo: { defaultMode: ApprovalMode; threads: Record<string, ApprovalMode | null> } | null = null;
   /** The main route Back leaves the settings/usage pages for; cleared once back on a main route. */
@@ -419,12 +428,13 @@ export class HeliconController {
     for (const dispose of this.disposers.splice(0)) {
       dispose();
     }
-    for (const handle of [this.flushHandle, this.refreshHandle, this.saveHandle, this.staleHandle]) {
+    for (const handle of [this.flushHandle, this.refreshHandle, this.saveHandle, this.staleHandle, this.loginPollHandle]) {
       if (handle !== null) {
         this.platform.cancel(handle);
       }
     }
     this.staleHandle = null;
+    this.loginPollHandle = null;
     this.platform.savePrefs(this.state.prefs);
   }
 
@@ -506,7 +516,7 @@ export class HeliconController {
     this.update((s) => ({ ...s, discovering: true }));
     try {
       await this.client.discover();
-      await this.refresh();
+      await Promise.all([this.refresh(), this.loadPlanUsage()]);
       if (!silent) {
         this.toast("success", "Threads refreshed");
       }
@@ -948,7 +958,25 @@ export class HeliconController {
       if (applied === null) {
         continue;
       }
-      if (staleThreadReason(turnId, this.state.sessions[id]?.live?.activeTurnId ?? null, applied, now) === null) {
+      // A turn waiting on the user is quiet because it should be, not because the stream died (#54).
+      // Reloading it sends session/resume into a live session mid-question, which is how a turn that
+      // was fine came to be reported failed. Treat the wait as activity, so the grace period starts
+      // over once the answer goes in rather than firing the moment it does.
+      const live = this.state.sessions[id]?.live;
+      const waiting =
+        Object.keys(thread.fold.userInputs).length > 0 ||
+        Object.keys(thread.fold.approvals).length > 0 ||
+        (live?.pendingInputs ?? 0) > 0 ||
+        (live?.pendingApprovals ?? 0) > 0;
+      if (waiting) {
+        this.appliedAt.set(id, now);
+        this.staleReloads.delete(id);
+        if (thread.stalled) {
+          this.setThread(id, { ...thread, stalled: false });
+        }
+        continue;
+      }
+      if (staleThreadReason(turnId, live?.activeTurnId ?? null, applied, now) === null) {
         continue;
       }
       const spent = this.staleReloads.get(id);
@@ -1846,6 +1874,17 @@ export class HeliconController {
     } catch {
       /* opening Settings retries the load */
     }
+    void this.loadAccountsHealth();
+  }
+
+  /** Whether META_API_KEY in the environment makes every account share one Meta login. A server without the route leaves this false. */
+  async loadAccountsHealth(): Promise<void> {
+    try {
+      const res = await this.client.accountsHealth();
+      this.update((s) => ({ ...s, metaApiKeyInherited: res.metaApiKeyInherited }));
+    } catch {
+      /* a server without the route leaves the flag false */
+    }
   }
 
   async createAccount(id: string, name?: string, seedFromDefault?: boolean): Promise<boolean> {
@@ -1915,6 +1954,94 @@ export class HeliconController {
         this.toast("error", "Could not set the default account", errorMessage(error));
       }
     }
+  }
+
+  /**
+   * Starts an in-app device-code sign-in for an account: spawns `muse login` on the server and shows
+   * the code the moment it arrives. Opens the modal right away with an empty marker so the wait for
+   * Muse to print the link is not silent, then polls `loadAccounts` until the account reports it is
+   * signed in (or gives up after `LOGIN_POLL_MAX_ATTEMPTS`, leaving the modal open with its link).
+   */
+  async beginLogin(id: string): Promise<void> {
+    this.stopLoginPoll();
+    const rev = ++this.loginRev;
+    this.update((s) => ({ ...s, accountLogin: { accountId: id, url: "", code: null, status: "waiting" } }));
+    try {
+      const result = await this.client.loginAccount(id);
+      if (rev !== this.loginRev) {
+        return;
+      }
+      if ("fallback" in result) {
+        this.update((s) => ({ ...s, accountLogin: { accountId: id, fallback: result.fallback } }));
+        return;
+      }
+      this.update((s) => ({ ...s, accountLogin: { accountId: id, url: result.url, code: result.code, status: "waiting" } }));
+      this.loginPollAttempts = 0;
+      this.scheduleLoginPoll(id, rev);
+    } catch (error) {
+      if (rev !== this.loginRev) {
+        return;
+      }
+      this.update((s) => ({ ...s, accountLogin: null }));
+      this.toast("error", "Could not start sign-in", errorMessage(error));
+    }
+  }
+
+  /** Closes the device-code modal and stops its poll. Safe to call whether or not a login is running. */
+  cancelLogin(): void {
+    this.loginRev += 1;
+    this.stopLoginPoll();
+    this.update((s) => ({ ...s, accountLogin: null }));
+  }
+
+  private scheduleLoginPoll(id: string, rev: number): void {
+    if (this.disposed || rev !== this.loginRev) {
+      return;
+    }
+    this.loginPollHandle = this.platform.schedule(() => {
+      this.loginPollHandle = null;
+      void this.pollLogin(id, rev);
+    }, LOGIN_POLL_MS);
+  }
+
+  private async pollLogin(id: string, rev: number): Promise<void> {
+    if (rev !== this.loginRev || !this.isWaitingLogin(id)) {
+      return;
+    }
+    this.loginPollAttempts += 1;
+    await this.loadAccounts();
+    if (rev !== this.loginRev || !this.isWaitingLogin(id)) {
+      return;
+    }
+    const account = this.state.accounts?.find((a) => a.id === id);
+    if (account?.hasLogin) {
+      this.update((s) => {
+        const login = s.accountLogin;
+        if (!login || login.accountId !== id || !("status" in login)) {
+          return s;
+        }
+        return { ...s, accountLogin: { ...login, status: "done" } };
+      });
+      return;
+    }
+    if (this.loginPollAttempts >= LOGIN_POLL_MAX_ATTEMPTS) {
+      return;
+    }
+    this.scheduleLoginPoll(id, rev);
+  }
+
+  /** Whether `accountLogin` is still the device prompt for `id`, waiting on a poll. */
+  private isWaitingLogin(id: string): boolean {
+    const login = this.state.accountLogin;
+    return !!login && login.accountId === id && "status" in login && login.status === "waiting";
+  }
+
+  private stopLoginPoll(): void {
+    if (this.loginPollHandle !== null) {
+      this.platform.cancel(this.loginPollHandle);
+      this.loginPollHandle = null;
+    }
+    this.loginPollAttempts = 0;
   }
 
   // ---------------------------------------------------------------- threads and projects

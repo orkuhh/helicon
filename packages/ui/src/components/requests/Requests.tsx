@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, Circle, CircleCheck, CircleX, Clock, ListTodo, Lock, MessageCircleQuestion, Pencil, PlugZap, ShieldAlert, X } from "lucide-react";
+import { CaretDownIcon, CaretUpIcon, ChatCircleDotsIcon, CheckCircleIcon, CheckIcon, CircleIcon, ClockIcon, ListChecksIcon, LockIcon, PencilSimpleIcon, PlugsIcon, ShieldWarningIcon, XCircleIcon, XIcon } from "../ui/icons.js";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useApp, useController } from "../../app/context.js";
 import type { LocalEcho } from "../../model/fold.js";
@@ -23,9 +23,9 @@ const PANEL = "enter-up overflow-hidden rounded-2xl bg-raised shadow-[0_0_0_1px_
 /** Refusals carry a cross, a plain yes a tick, and a yes that writes a rule the heavier badge. */
 function choiceIcon(choice: ApprovalChoice) {
   if (choice.decision !== "approved") {
-    return <X size={13} />;
+    return <XIcon size={13} />;
   }
-  return choice.rulePreview ? <CircleCheck size={13} /> : <Check size={13} />;
+  return choice.rulePreview ? <CheckCircleIcon size={13} /> : <CheckIcon size={13} />;
 }
 
 /** The refusal among the offered choices, whatever the host calls it. */
@@ -88,7 +88,7 @@ export function ApprovalPanel(props: { request: ApprovalRequest; primary: boolea
     <section aria-label="Approval needed" className={PANEL}>
       <div className="flex items-start gap-3 px-4 pt-3.5">
         <span className="mt-px flex size-7 shrink-0 items-center justify-center rounded-lg bg-warn-soft text-warn-text">
-          <ShieldAlert size={15} />
+          <ShieldWarningIcon size={15} />
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-fg">Muse wants to {lowerFirst(description.title)}</h3>
@@ -305,7 +305,7 @@ export function QuestionPanel(props: { request: UserInputRequest; keyboard: bool
     <section aria-label="Muse has a question" className={PANEL}>
       <div className="flex items-start gap-3 px-4 pt-3.5">
         <span className="mt-px flex size-7 shrink-0 items-center justify-center rounded-lg bg-warn-soft text-warn-text">
-          <MessageCircleQuestion size={15} />
+          <ChatCircleDotsIcon size={15} />
         </span>
         <div key={question.id} className="enter-up min-w-0 flex-1">
           <p className="text-2xs font-medium text-subtle">{question.header || "Muse has a question"}</p>
@@ -344,7 +344,7 @@ export function QuestionPanel(props: { request: UserInputRequest; keyboard: bool
                 )}
               >
                 {multiple ? (
-                  <Check size={11} strokeWidth={3} />
+                  <CheckIcon size={11} />
                 ) : (
                   <span className="size-1.5 rounded-full bg-current transition-transform duration-200" style={{ transform: on ? "scale(1)" : "scale(0)" }} />
                 )}
@@ -363,7 +363,7 @@ export function QuestionPanel(props: { request: UserInputRequest; keyboard: bool
         })}
         <label className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors focus-within:bg-hover hover:bg-hover">
           <span className="flex size-4 shrink-0 items-center justify-center text-subtle" aria-hidden="true">
-            <Pencil size={12} />
+            <PencilSimpleIcon size={12} />
           </span>
           <input
             value={custom[question.id] ?? ""}
@@ -395,11 +395,11 @@ export function QuestionPanel(props: { request: UserInputRequest; keyboard: bool
         {questions.length > 1 ? (
           <div className="flex items-center gap-0.5 text-subtle">
             <IconButton size="xs" label="Previous question" disabled={index === 0} onClick={() => setIndex((i) => Math.max(0, i - 1))}>
-              <ChevronUp size={14} />
+              <CaretUpIcon size={14} />
             </IconButton>
             <RollingDigits className="text-xs font-medium" value={`${index + 1} / ${questions.length}`} />
             <IconButton size="xs" label="Next question" disabled={last} onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))}>
-              <ChevronDown size={14} />
+              <CaretDownIcon size={14} />
             </IconButton>
           </div>
         ) : null}
@@ -418,13 +418,13 @@ export function QuestionPanel(props: { request: UserInputRequest; keyboard: bool
 function TodoMark(props: { status: string }) {
   switch (props.status) {
     case "completed":
-      return <CircleCheck size={15} className="shrink-0 text-ok" aria-label="Done" />;
+      return <CheckCircleIcon size={15} className="shrink-0 text-ok" aria-label="Done" />;
     case "inProgress":
       return <Spinner size={13} className="m-px text-accent-text" label="In progress" />;
     case "cancelled":
-      return <CircleX size={15} className="shrink-0 text-subtle" aria-label="Cancelled" />;
+      return <XCircleIcon size={15} className="shrink-0 text-subtle" aria-label="Cancelled" />;
     default:
-      return <Circle size={15} className="shrink-0 text-[var(--border-strong)]" aria-label="To do" />;
+      return <CircleIcon size={15} className="shrink-0 text-[var(--border-strong)]" aria-label="To do" />;
   }
 }
 
@@ -433,7 +433,7 @@ export function CloseCard(props: { label: string; onClose: () => void }) {
   return (
     <Tip label={`${props.label}. Bring it back from the top bar.`}>
       <IconButton size="sm" label={props.label} onClick={props.onClose} className="ml-1 shrink-0">
-        <X size={13} />
+        <XIcon size={13} />
       </IconButton>
     </Tip>
   );
@@ -459,14 +459,14 @@ export function PlanPanel(props: { sessionId: string; items: TodoItem[] }) {
           onClick={() => controller.setCardOpen(cardKey, !open)}
           className="flex h-10 min-w-0 flex-1 items-center gap-2.5 pl-3.5 text-left"
         >
-          <ListTodo size={15} className="shrink-0 text-subtle" />
+          <ListChecksIcon size={15} className="shrink-0 text-subtle" />
           <span className="text-sm font-medium text-fg">Plan</span>
           <span className="shrink-0 text-xs text-subtle tabular-nums">
             <RollingDigits value={String(done)} /> of {props.items.length} done
           </span>
           {!open && active ? <span className="min-w-0 truncate text-xs text-muted">{active.activeForm ?? active.text}</span> : null}
           <span className="flex-1" />
-          <ChevronDown size={14} className={cn("shrink-0 text-subtle transition-transform duration-200", !open && "-rotate-90")} />
+          <CaretDownIcon size={14} className={cn("shrink-0 text-subtle transition-transform duration-200", !open && "-rotate-90")} />
         </button>
         <CloseCard label="Hide the plan" onClose={() => controller.setCardHidden(cardKey, true)} />
       </div>
@@ -501,12 +501,12 @@ export function QueuedList(props: { sessionId: string; items: LocalEcho[] }) {
     <div className="flex flex-col gap-1.5">
       {props.items.map((echo) => (
         <div key={echo.localId} className="enter-up flex items-center gap-2.5 rounded-xl bg-sunken py-1.5 pr-1.5 pl-3 shadow-[0_0_0_1px_var(--border)]">
-          <Clock size={14} className="shrink-0 text-subtle" />
+          <ClockIcon size={14} className="shrink-0 text-subtle" />
           <span className="shrink-0 text-xs font-medium text-subtle">Queued</span>
           <span className="min-w-0 flex-1 truncate text-sm text-muted">{echo.text}</span>
           <Tip label="Remove from the queue">
             <IconButton size="xs" label="Remove from the queue" onClick={() => void controller.unqueue(props.sessionId, echo)}>
-              <X size={13} />
+              <XIcon size={13} />
             </IconButton>
           </Tip>
         </div>
@@ -523,7 +523,7 @@ export function QueuedList(props: { sessionId: string; items: LocalEcho[] }) {
 export function StalledNotice(props: { onRetry: () => void; busy: boolean }) {
   return (
     <div className="flex items-start gap-3 rounded-2xl bg-sunken px-4 py-3 shadow-[0_0_0_1px_var(--border)]">
-      <PlugZap size={15} className="mt-0.5 shrink-0 text-warn" />
+      <PlugsIcon size={15} className="mt-0.5 shrink-0 text-warn" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-fg">This thread stopped receiving updates</p>
         <p className="mt-0.5 text-xs text-muted">
@@ -541,7 +541,7 @@ export function StalledNotice(props: { onRetry: () => void; busy: boolean }) {
 export function ReadOnlyNotice(props: { reason: string | null; onRetry: () => void; busy: boolean }) {
   return (
     <div className="flex items-start gap-3 rounded-2xl bg-sunken px-4 py-3 shadow-[0_0_0_1px_var(--border)]">
-      <Lock size={15} className="mt-0.5 shrink-0 text-subtle" />
+      <LockIcon size={15} className="mt-0.5 shrink-0 text-subtle" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-fg">Open in another Muse session</p>
         <p className="mt-0.5 text-xs text-muted">

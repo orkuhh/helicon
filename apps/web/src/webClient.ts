@@ -336,6 +336,14 @@ export class WebHeliconClient implements HeliconClient {
     await call("PATCH", "/api/projects/default-account", { cwd, accountId });
   }
 
+  async accountsHealth(): Promise<{ metaApiKeyInherited: boolean }> {
+    return call<{ metaApiKeyInherited: boolean }>("GET", "/api/accounts/health");
+  }
+
+  async loginAccount(id: string): Promise<{ url: string; code: string | null } | { fallback: string }> {
+    return call<{ url: string; code: string | null } | { fallback: string }>("POST", `/api/accounts/${enc(id)}/login`);
+  }
+
   async getYoloSettings(): Promise<YoloSettings> {
     return parseYoloSettings(await call<unknown>("GET", "/api/yolo-settings"));
   }
