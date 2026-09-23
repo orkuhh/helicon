@@ -45,6 +45,10 @@ import { FileError, listFolder, readProjectFile, resolveInRoot, searchProjectFil
 import { PathError, createDirectory, listDirectory, resolveUserPath, type PathContext } from "./paths.js";
 import { buildThreadTitlePrompt, deriveTitle, parseExecTitle, sanitizeThreadTitle } from "./threadTitles.js";
 import { AoniaError, createAonia, parseLoginOutput, type Aonia, type Profile } from "@harjjotsinghh/aonia";
+import { HttpError } from "./httpError.js";
+import { BrowserApi } from "./browserApi.js";
+import { previewToolAllowed } from "./browserApproval.js";
+import { PreviewMcpToolkit, PREVIEW_TOOL_NAMES } from "./mcpPreview.js";
 
 export const HELICON_VERSION = "0.17.0";
 
@@ -131,6 +135,8 @@ export interface ServerOptions {
   exec?: ExecFn;
   /** Runs the user's own `!` commands; spawns a real process by default. */
   shellRunner?: ShellRunner;
+  /** Use in-memory fake browser engine (tests). */
+  browserUseFakeEngine?: boolean;
   /** Spawns `muse login` for the device-code route; a thin wrapper over `node:child_process` spawn by default. */
   loginSpawn?: LoginSpawn;
 }
@@ -165,6 +171,7 @@ interface LiveState {
   goal: GoalBlock | null;
   /** Bumped on every live goal change, so a slow transcript load never writes an older goal over a newer one. */
   goalSeq: number;
+  approvalMode: ApprovalMode;
 }
 
 export interface LiveView {
@@ -210,15 +217,6 @@ const ENV_CACHE_MS = 30_000;
 const CLONE_TIMEOUT_MS = 10 * 60_000;
 const AUTO_SETTLE_SWEEP_MS = 60_000;
 const LOGIN_TIMEOUT_MS = 30_000;
-
-class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
@@ -675,6 +673,9 @@ export class HeliconServer {
   /** Where Muse runs, once known; see `museRuntime`. */
   private runtimeKnown: MuseRuntime | null = null;
   private closed = false;
+  private readonly browserApi: BrowserApi;
+  private readonly mcpToolkit: PreviewMcpToolkit;
+  private mcpSessionId: string | null = null;
   private readonly options: Required<
     Omit<
       ServerOptions,
@@ -720,6 +721,7 @@ export class HeliconServer {
       autoSettleDays: options.autoSettleDays === undefined ? 3 : options.autoSettleDays,
       exec: options.exec ?? defaultExec,
       shellRunner: options.shellRunner ?? ((command, args) => runCapture(command, args, undefined, SHELL_TIMEOUT_MS)),
+      browserUseFakeEngine: options.browserUseFakeEngine ?? process.env["HELICON_BROWSER_FAKE"] === "1",
       loginSpawn: options.loginSpawn ?? defaultLoginSpawn,
     };
     this.opener = options.opener ?? defaultOpener(this.options.platform);
@@ -727,6 +729,25 @@ export class HeliconServer {
       this.options.dataDir === ":memory:" ? ":memory:" : join(this.options.dataDir, "helicon.db"),
     );
     this.aonia = options.aonia ?? createAonia(this.options.musePath ? { musePath: this.options.musePath } : {});
+    this.browserApi = new BrowserApi({
+      store: this.store,
+      emit: (type, data) => this.emit(type, data),
+      useFakeEngine: options.browserUseFakeEngine ?? process.env["HELICON_BROWSER_FAKE"] === "1",
+      exec: this.options.exec,
+      requireApproval: (sessionId, tool, detail) => this.browserApproval(sessionId, tool, detail),
+      onWorkLog: (sessionId, verb, detail) => {
+        this.emit("browser-work", { sessionId, verb, detail, at: Date.now() });
+      },
+    });
+    this.mcpToolkit = new PreviewMcpToolkit(
+      () => this.mcpSessionId,
+      this.browserApi.getHost(),
+      (verb, detail) => {
+        if (this.mcpSessionId) {
+          this.emit("browser-work", { sessionId: this.mcpSessionId, verb, detail, at: Date.now() });
+        }
+      },
+    );
     this.server = createServer((req, res) => {
       void this.route(req, res).catch((error) => this.fail(res, 500, String(error)));
     });
@@ -772,6 +793,7 @@ export class HeliconServer {
       this.server.close((error) => (error ? reject(error) : resolve())),
     );
     await this.titleWorker?.catch(() => undefined);
+    await this.browserApi.close();
     this.store.close();
   }
 
@@ -783,6 +805,22 @@ export class HeliconServer {
         /* drop broken sinks on next write */
       }
     }
+  }
+
+  /** D9: loopback preview ops auto-allow; destructive/open-world tools follow session approval mode. */
+  private async browserApproval(sessionId: string, tool: string, detail: Record<string, unknown>): Promise<boolean> {
+    const yolo = this.store.getYoloSettings().enabled;
+    const live = this.liveFor(sessionId);
+    let tabUrl: string | undefined;
+    try {
+      const tabId = typeof detail["tabId"] === "string" ? detail["tabId"] : undefined;
+      const tabs = await this.browserApi.getHost().listTabs(sessionId);
+      const tab = (tabId ? tabs.find((t) => t.tabId === tabId) : tabs[0]) ?? null;
+      tabUrl = tab?.url;
+    } catch {
+      tabUrl = undefined;
+    }
+    return previewToolAllowed(live.approvalMode, tool, detail, { yolo, tabUrl });
   }
 
   /** Coalesce bursts (discovery, title backfill) into one sidebar refresh. */
@@ -917,6 +955,22 @@ export class HeliconServer {
       this.fail(res, 401, "Missing or invalid token.");
       return;
     }
+    if (path === "/mcp") {
+      if (!this.authorized(req)) {
+        this.fail(res, 401, "Missing or invalid token.");
+        return;
+      }
+      try {
+        const handled = await this.api(method, path, url, req, res);
+        if (!handled) {
+          this.fail(res, 404, "Not found.");
+        }
+      } catch (error) {
+        const info = errorInfo(error);
+        this.fail(res, info.status, info.message, info.kind);
+      }
+      return;
+    }
     if (path.startsWith("/api/")) {
       try {
         const handled = await this.api(method, path, url, req, res);
@@ -970,6 +1024,32 @@ export class HeliconServer {
       }
       res.setHeader("set-cookie", cookie.join("; "));
       this.json(res, 200, { ok: true, required: true });
+      return true;
+    }
+    if (path === "/mcp" && method === "POST") {
+      const body = await this.readBody(req);
+      const sessionId = str(body["sessionId"]);
+      if (sessionId) {
+        this.mcpSessionId = sessionId;
+      }
+      const call = asRecord(body["tool"]);
+      const name = call ? str(call["name"]) : str(body["name"]);
+      const args = (call ? asRecord(call["arguments"]) : asRecord(body["arguments"])) ?? {};
+      if (!name) {
+        throw new HttpError(400, "tool name is required.");
+      }
+      const sid = sessionId ?? this.mcpSessionId;
+      if (sid && PREVIEW_TOOL_NAMES.includes(name as (typeof PREVIEW_TOOL_NAMES)[number])) {
+        const ok = await this.browserApproval(sid, name, args);
+        if (!ok) {
+          throw new HttpError(403, "Browser tool denied by approval policy.");
+        }
+      }
+      const result = await this.mcpToolkit.invoke({ name, arguments: args });
+      this.json(res, 200, { tools: PREVIEW_TOOL_NAMES, result });
+      return true;
+    }
+    if (await this.browserApi.handle(method, path, url, req, res, () => this.readBody(req))) {
       return true;
     }
     if (method === "GET" && path === "/api/health") {
@@ -1712,7 +1792,8 @@ export class HeliconServer {
       return this.envCache.value;
     }
     const hint = this.runtimeHint();
-    const probe = await probeEnvironment(defaultExec, this.options.platform, {
+    const exec = this.options.exec ?? defaultExec;
+    const probe = await probeEnvironment(exec, this.options.platform, {
       preference: hint === "native" || hint === "wsl" ? hint : this.options.runtime,
       ...(this.options.findNativeMuse ? { findNative: this.options.findNativeMuse } : {}),
     });
@@ -1806,6 +1887,7 @@ export class HeliconServer {
         lastError: null,
         goal: null,
         goalSeq: 0,
+        approvalMode: "onRequest",
       };
       this.live.set(sessionId, state);
     }
@@ -2512,6 +2594,10 @@ export class HeliconServer {
       if (active !== live.activeTurnId) {
         live.activeTurnId = active;
         live.turnStartedAt = active ? (live.turnStartedAt ?? nowIso()) : null;
+      }
+      const modeRaw = asRecord(msp["approvalMode"])?.["mode"];
+      if (isApprovalMode(modeRaw)) {
+        live.approvalMode = modeRaw;
       }
     }
     live.pendingApprovals = new Set(approvals.map((a) => str(a["approvalId"])).filter((id): id is string => id !== null));

@@ -11,6 +11,7 @@ import { LEVELS, MODES } from "../composer/Composer.js";
 import { CODE_THEME_LABELS, updateSummary } from "../sidebar/Sidebar.js";
 import { Modal } from "../ui/overlays.js";
 import { TopBar } from "../chrome.js";
+import { BrowserSettingsSection } from "./BrowserSettingsSection.js";
 import { Button, IconButton, MOD, cn } from "../ui/primitives.js";
 
 /** A row's control: one choice out of a few. Scrolls sideways when the row is too narrow to wrap. */
@@ -357,6 +358,13 @@ export function SettingsPage() {
       </header>
 
       <div className="mx-auto w-full min-w-0 max-w-[720px] px-4 pb-16 @min-[520px]:px-6">
+        <BrowserSettingsSection />
+        <Section title="Browser tools">
+          <Row label="OS snapshot" description="Capture the screen into the composer with ⌘⇧S (desktop).">
+            <p className="text-xs text-subtle">Requires the Helicon desktop app.</p>
+          </Row>
+        </Section>
+
         <Section title="Appearance">
           <Row label="Theme" description="Light, dark, or whatever this device is set to.">
             <Pick value={prefs.theme} options={THEMES} onChange={(value) => controller.setTheme(value)} />

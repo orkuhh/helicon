@@ -166,8 +166,76 @@ export interface HeliconClient {
   openFileExternally(cwd: string, path: string): Promise<void>;
   /** Where the browser loads a project file's bytes from, for images, video, audio and PDFs. */
   fileUrl(cwd: string, path: string): string;
+  listBrowserTabs(sessionId: string): Promise<import("./types.js").BrowserTabSnapshot[]>;
+  openBrowserTab(sessionId: string, url?: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  navigateBrowserTab(sessionId: string, tabId: string, url: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  reloadBrowserTab(sessionId: string, tabId: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  closeBrowserTab(sessionId: string, tabId: string): Promise<void>;
+  listDiscoveredServers(): Promise<{ url: string; title: string | null }[]>;
+  browserStreamUrl(sessionId: string, tabId: string): string;
+  browserPipUrl(sessionId: string, tabId: string): string;
+  startBrowserPick(sessionId: string, tabId: string): Promise<void>;
+  cancelBrowserPick(sessionId: string, tabId: string): Promise<void>;
+  captureBrowserScreenshot(sessionId: string, tabId: string): Promise<{ pngBase64: string; path: string }>;
+  probeBrowserContextMenu(
+    sessionId: string,
+    tabId: string,
+    x: number,
+    y: number,
+    canvasWidth: number,
+    canvasHeight: number,
+  ): Promise<import("./types.js").BrowserContextMenuProbe>;
+  runBrowserContextMenuAction(
+    sessionId: string,
+    tabId: string,
+    x: number,
+    y: number,
+    canvasWidth: number,
+    canvasHeight: number,
+    action: import("./types.js").BrowserContextMenuAction,
+  ): Promise<void>;
+  startBrowserRecording(sessionId: string, tabId: string): Promise<void>;
+  stopBrowserRecording(sessionId: string, tabId: string): Promise<{ path: string; bytes: number }>;
+  sendBrowserPointer(sessionId: string, tabId: string, x: number, y: number, canvasWidth: number, canvasHeight: number): Promise<void>;
+  listBrowserDownloads(): Promise<{ id: string; url: string; suggestedFilename: string; path: string; at: string }[]>;
+  resizeBrowserTab(
+    sessionId: string,
+    tabId: string,
+    viewport: import("./types.js").BrowserTabSnapshot["viewport"],
+  ): Promise<import("./types.js").BrowserTabSnapshot>;
+  setBrowserAppearance(
+    sessionId: string,
+    tabId: string,
+    appearance: import("./types.js").BrowserTabSnapshot["colorScheme"],
+  ): Promise<import("./types.js").BrowserTabSnapshot>;
+  openBrowserDevTools(sessionId: string, tabId: string): Promise<void>;
+  getBrowserDefaults(): Promise<BrowserDefaultsView>;
+  patchBrowserDefaults(patch: Partial<BrowserDefaultsView>): Promise<BrowserDefaultsView>;
+  listBrowserProfiles(): Promise<{ id: string; name: string; persistent: boolean; builtIn: boolean }[]>;
+  createBrowserProfile(id: string, name: string): Promise<void>;
+  clearBrowserProfileData(profileId: string, what: "cookies" | "cache"): Promise<void>;
+  listBrowserImportSources(): Promise<{ id: string; name: string; available: boolean; reason?: string }[]>;
+  importBrowserCookies(filePath: string): Promise<{ imported: number; skipped: number }>;
+  submitBrowserPickAnnotation(sessionId: string, tabId: string, payload: Record<string, unknown>): Promise<void>;
+  backBrowserTab(sessionId: string, tabId: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  forwardBrowserTab(sessionId: string, tabId: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  hardReloadBrowserTab(sessionId: string, tabId: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  stopBrowserTab(sessionId: string, tabId: string): Promise<import("./types.js").BrowserTabSnapshot>;
+  setBrowserMuted(sessionId: string, tabId: string, muted: boolean): Promise<import("./types.js").BrowserTabSnapshot>;
+  listBrowserHistory(sessionId: string): Promise<{ url: string; title: string | null }[]>;
+  removeBrowserHistoryEntry(sessionId: string, url: string): Promise<void>;
   /** Subscribe to server events; returns an unsubscribe function. */
   subscribe(handler: EventHandler): () => void;
+}
+
+export interface BrowserDefaultsView {
+  profileId: string;
+  autoShowFloatingPreview: boolean;
+  recordingShowKeyPresses: boolean;
+  recordingShowMousePresses: boolean;
+  grantedPermissions: string[];
+  colorScheme: "system" | "light" | "dark";
+  configuredLocalUrls: string[];
 }
 
 /** Parse the title-settings endpoint; malformed answers fall back to on with no model. */

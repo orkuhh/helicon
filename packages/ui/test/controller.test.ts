@@ -329,6 +329,119 @@ class FakeClient implements HeliconClient {
   fileUrl(cwd: string, path: string) {
     return `/raw?${cwd}&${path}`;
   }
+  async listBrowserTabs() {
+    return [];
+  }
+  async openBrowserTab() {
+    return {
+      tabId: "tab1",
+      url: "about:blank",
+      title: "",
+      loading: false,
+      failed: null,
+      profileId: "default",
+      muted: false,
+      audible: false,
+      controller: "none" as const,
+      viewport: { mode: "fill", width: 1280, height: 720, presetId: null, zoom: 1 },
+      colorScheme: "system" as const,
+      faviconDataUrl: null,
+    };
+  }
+  async navigateBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async reloadBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async closeBrowserTab() {}
+  async listDiscoveredServers() {
+    return [];
+  }
+  browserStreamUrl() {
+    return "/api/browser/stream";
+  }
+  browserPipUrl() {
+    return "/api/browser/pip.html";
+  }
+  async startBrowserPick() {}
+  async cancelBrowserPick() {}
+  async captureBrowserScreenshot() {
+    return { pngBase64: "", path: "/tmp/s.png" };
+  }
+  async probeBrowserContextMenu() {
+    return {
+      canCut: false,
+      canCopy: false,
+      canPaste: false,
+      canSelectAll: false,
+      linkUrl: null,
+      imageUrl: null,
+      misspelledWord: null,
+      spellSuggestions: [],
+    };
+  }
+  async runBrowserContextMenuAction() {}
+  async startBrowserRecording() {}
+  async stopBrowserRecording() {
+    return { path: "/tmp/x.webm", bytes: 0 };
+  }
+  async sendBrowserPointer() {}
+  async listBrowserDownloads() {
+    return [];
+  }
+  async resizeBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async setBrowserAppearance() {
+    return await this.openBrowserTab();
+  }
+  async openBrowserDevTools() {}
+  async getBrowserDefaults() {
+    return {
+      profileId: "default",
+      autoShowFloatingPreview: true,
+      recordingShowKeyPresses: true,
+      recordingShowMousePresses: true,
+      grantedPermissions: [],
+      colorScheme: "system" as const,
+      configuredLocalUrls: [],
+    };
+  }
+  async backBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async forwardBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async hardReloadBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async stopBrowserTab() {
+    return await this.openBrowserTab();
+  }
+  async setBrowserMuted() {
+    return await this.openBrowserTab();
+  }
+  async listBrowserHistory() {
+    return [];
+  }
+  async removeBrowserHistoryEntry() {}
+  async patchBrowserDefaults(patch: Partial<import("../src/client.js").BrowserDefaultsView>) {
+    return { ...(await this.getBrowserDefaults()), ...patch };
+  }
+  async listBrowserProfiles() {
+    return [{ id: "default", name: "Default", persistent: true, builtIn: true }];
+  }
+  async createBrowserProfile() {}
+  async clearBrowserProfileData() {}
+  async listBrowserImportSources() {
+    return [];
+  }
+  async importBrowserCookies() {
+    return { imported: 0, skipped: 0 };
+  }
+  async submitBrowserPickAnnotation() {}
   subscribe(handler: EventHandler) {
     this.handler = handler;
     return () => {

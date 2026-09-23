@@ -101,6 +101,11 @@ export interface Prefs {
   /** The file viewer beside a thread is open. */
   filesOpen: boolean;
   filesWidth: number;
+  /** In-app browser panel is open. */
+  browserOpen: boolean;
+  browserWidth: number;
+  /** Which right-side surface is visible when either panel is open. */
+  rightSideTab: "files" | "browser";
   /** The version whose release notes were last shown, so an update shows what changed once. */
   lastSeenVersion: string | null;
   /** Session statistics pills above the composer: turns, speed and token usage for the open thread. */
@@ -115,6 +120,9 @@ export interface Prefs {
 export const DEFAULT_FILES_WIDTH = 480;
 export const FILES_WIDTH_MIN = 320;
 export const FILES_WIDTH_MAX = 1200;
+export const DEFAULT_BROWSER_WIDTH = 480;
+export const BROWSER_WIDTH_MIN = 320;
+export const BROWSER_WIDTH_MAX = 1200;
 
 /** One thread's file viewer: the files it has open as tabs, which one shows, and whether the tree is up instead. */
 export interface FilePanel {
@@ -159,6 +167,9 @@ export function defaultPrefs(now = new Date().toISOString()): Prefs {
     zoom: 1,
     filesOpen: false,
     filesWidth: DEFAULT_FILES_WIDTH,
+    browserOpen: false,
+    browserWidth: DEFAULT_BROWSER_WIDTH,
+    rightSideTab: "files",
     lastSeenVersion: null,
     showTelemetry: false,
     preYolo: null,
@@ -260,6 +271,8 @@ export interface AppState {
   fileVersions: Record<string, number>;
   /** Folders open in each project's file tree. */
   fileTreeOpen: Record<string, string[]>;
+  /** Per-thread collaborative browser state. */
+  browser: Record<string, import("./browser.js").BrowserSessionState>;
 }
 
 /** `confirmFullAccess` is the full-access confirmation, which `/permissions full` must still pass through. */
@@ -312,6 +325,7 @@ export function initialState(prefs: Prefs): AppState {
     fileDrafts: {},
     fileVersions: {},
     fileTreeOpen: {},
+    browser: {},
     draftHandoff: null,
     updates: null,
     skills: {},
@@ -373,6 +387,9 @@ export function revivePrefs(raw: unknown, fallback: Prefs): Prefs {
     zoom: pick("zoom", (v) => typeof v === "number" && Number.isFinite(v) && v >= ZOOM_MIN && v <= ZOOM_MAX),
     filesOpen: pick("filesOpen", (v) => typeof v === "boolean"),
     filesWidth: pick("filesWidth", (v) => typeof v === "number" && v >= FILES_WIDTH_MIN && v <= FILES_WIDTH_MAX),
+    browserOpen: pick("browserOpen", (v) => typeof v === "boolean"),
+    browserWidth: pick("browserWidth", (v) => typeof v === "number" && v >= BROWSER_WIDTH_MIN && v <= BROWSER_WIDTH_MAX),
+    rightSideTab: pick("rightSideTab", (v) => v === "files" || v === "browser"),
     lastSeenVersion: pick("lastSeenVersion", (v) => v === null || typeof v === "string"),
     showTelemetry: pick("showTelemetry", (v) => typeof v === "boolean"),
     preYolo: pick("preYolo", isPreYolo),

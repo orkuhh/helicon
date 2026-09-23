@@ -9,6 +9,8 @@ import {
   type ApprovalDecisionInput,
   type ApprovalMode,
   type AttachmentView,
+  type BrowserContextMenuAction,
+  type BrowserContextMenuProbe,
   type DirectoryListing,
   type EnvironmentStatus,
   type EventHandler,
@@ -442,6 +444,201 @@ export class WebHeliconClient implements HeliconClient {
     return this.assetUrl(`/api/files/raw?cwd=${enc(cwd)}&path=${enc(path)}`);
   }
 
+  async listBrowserTabs(sessionId: string): Promise<import("@helicon/ui").BrowserTabSnapshot[]> {
+    return (await call<{ tabs: import("@helicon/ui").BrowserTabSnapshot[] }>("GET", `/api/sessions/${enc(sessionId)}/browser/tabs`)).tabs;
+  }
+
+  async openBrowserTab(sessionId: string, url?: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs`, { url })).tab;
+  }
+
+  async navigateBrowserTab(sessionId: string, tabId: string, url: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (
+      await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/navigate`, { url })
+    ).tab;
+  }
+
+  async reloadBrowserTab(sessionId: string, tabId: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/reload`, {})).tab;
+  }
+
+  async closeBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    await call("DELETE", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}`);
+  }
+
+  async listDiscoveredServers(): Promise<{ url: string; title: string | null }[]> {
+    return (await call<{ servers: { url: string; title: string | null }[] }>("GET", "/api/browser/discovered")).servers;
+  }
+
+  browserStreamUrl(sessionId: string, tabId: string): string {
+    return url(`/api/browser/stream?sessionId=${enc(sessionId)}&tabId=${enc(tabId)}`);
+  }
+
+  browserPipUrl(sessionId: string, tabId: string): string {
+    return url(`/api/browser/pip.html?sessionId=${enc(sessionId)}&tabId=${enc(tabId)}`);
+  }
+
+  async startBrowserPick(sessionId: string, tabId: string): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/pick/start`, {});
+  }
+
+  async cancelBrowserPick(sessionId: string, tabId: string): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/pick/cancel`, {});
+  }
+
+  async captureBrowserScreenshot(sessionId: string, tabId: string): Promise<{ pngBase64: string; path: string }> {
+    return await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/screenshot`, {});
+  }
+
+  async probeBrowserContextMenu(
+    sessionId: string,
+    tabId: string,
+    x: number,
+    y: number,
+    canvasWidth: number,
+    canvasHeight: number,
+  ): Promise<BrowserContextMenuProbe> {
+    const body = await call<{ probe: BrowserContextMenuProbe }>(
+      "POST",
+      `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/context-menu/probe`,
+      { x, y, canvasWidth, canvasHeight },
+    );
+    return body.probe;
+  }
+
+  async runBrowserContextMenuAction(
+    sessionId: string,
+    tabId: string,
+    x: number,
+    y: number,
+    canvasWidth: number,
+    canvasHeight: number,
+    action: BrowserContextMenuAction,
+  ): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/context-menu/action`, {
+      x,
+      y,
+      canvasWidth,
+      canvasHeight,
+      action,
+    });
+  }
+
+  async startBrowserRecording(sessionId: string, tabId: string): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/recording/start`, {});
+  }
+
+  async stopBrowserRecording(sessionId: string, tabId: string): Promise<{ path: string; bytes: number }> {
+    return await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/recording/stop`, {});
+  }
+
+  async sendBrowserPointer(sessionId: string, tabId: string, x: number, y: number, canvasWidth: number, canvasHeight: number): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/pointer`, {
+      x,
+      y,
+      canvasWidth,
+      canvasHeight,
+    });
+  }
+
+  async listBrowserDownloads(): Promise<{ id: string; url: string; suggestedFilename: string; path: string; at: string }[]> {
+    return (await call<{ downloads: { id: string; url: string; suggestedFilename: string; path: string; at: string }[] }>("GET", "/api/browser/downloads")).downloads;
+  }
+
+  async resizeBrowserTab(
+    sessionId: string,
+    tabId: string,
+    viewport: import("@helicon/ui").BrowserTabSnapshot["viewport"],
+  ): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (
+      await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>(
+        "POST",
+        `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/resize`,
+        { viewport },
+      )
+    ).tab;
+  }
+
+  async setBrowserAppearance(
+    sessionId: string,
+    tabId: string,
+    appearance: import("@helicon/ui").BrowserTabSnapshot["colorScheme"],
+  ): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (
+      await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>(
+        "POST",
+        `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/appearance`,
+        { appearance },
+      )
+    ).tab;
+  }
+
+  async openBrowserDevTools(sessionId: string, tabId: string): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/devtools`, {});
+  }
+
+  async getBrowserDefaults(): Promise<import("@helicon/ui").BrowserDefaultsView> {
+    const body = await call<{ defaults: import("@helicon/ui").BrowserDefaultsView }>("GET", "/api/browser/defaults");
+    return body.defaults;
+  }
+
+  async patchBrowserDefaults(patch: Partial<import("@helicon/ui").BrowserDefaultsView>): Promise<import("@helicon/ui").BrowserDefaultsView> {
+    const body = await call<{ defaults: import("@helicon/ui").BrowserDefaultsView }>("PATCH", "/api/browser/defaults", patch);
+    return body.defaults;
+  }
+
+  async listBrowserProfiles(): Promise<{ id: string; name: string; persistent: boolean; builtIn: boolean }[]> {
+    return (await call<{ profiles: { id: string; name: string; persistent: boolean; builtIn: boolean }[] }>("GET", "/api/browser/profiles")).profiles;
+  }
+
+  async createBrowserProfile(id: string, name: string): Promise<void> {
+    await call("POST", "/api/browser/profiles", { id, name });
+  }
+
+  async clearBrowserProfileData(profileId: string, what: "cookies" | "cache"): Promise<void> {
+    await call("POST", "/api/browser/clear", { profileId, what });
+  }
+
+  async listBrowserImportSources(): Promise<{ id: string; name: string; available: boolean; reason?: string }[]> {
+    return (await call<{ sources: { id: string; name: string; available: boolean; reason?: string }[] }>("GET", "/api/browser/import/sources")).sources;
+  }
+
+  async importBrowserCookies(filePath: string): Promise<{ imported: number; skipped: number }> {
+    return await call("POST", "/api/browser/import", { filePath });
+  }
+
+  async submitBrowserPickAnnotation(sessionId: string, tabId: string, payload: Record<string, unknown>): Promise<void> {
+    await call("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/pick/complete`, payload);
+  }
+
+  async backBrowserTab(sessionId: string, tabId: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/back`, {})).tab;
+  }
+
+  async forwardBrowserTab(sessionId: string, tabId: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/forward`, {})).tab;
+  }
+
+  async hardReloadBrowserTab(sessionId: string, tabId: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/hard-reload`, {})).tab;
+  }
+
+  async stopBrowserTab(sessionId: string, tabId: string): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/stop`, {})).tab;
+  }
+
+  async setBrowserMuted(sessionId: string, tabId: string, muted: boolean): Promise<import("@helicon/ui").BrowserTabSnapshot> {
+    return (await call<{ tab: import("@helicon/ui").BrowserTabSnapshot }>("POST", `/api/sessions/${enc(sessionId)}/browser/tabs/${enc(tabId)}/mute`, { muted })).tab;
+  }
+
+  async listBrowserHistory(sessionId: string): Promise<{ url: string; title: string | null }[]> {
+    return (await call<{ history: { url: string; title: string | null }[] }>("GET", `/api/sessions/${enc(sessionId)}/browser/history`)).history;
+  }
+
+  async removeBrowserHistoryEntry(sessionId: string, url: string): Promise<void> {
+    await call("DELETE", `/api/sessions/${enc(sessionId)}/browser/history`, { url });
+  }
+
   /**
    * A server path the browser loads by itself, like an attachment's bytes. It carries no token: the
    * cookie from the handshake is what lets these through, so nothing secret ends up in an `img` tag.
@@ -489,6 +686,48 @@ export class WebHeliconClient implements HeliconClient {
         this.dispatch(JSON.parse((message as MessageEvent<string>).data) as HeliconEvent);
       } catch {
         /* ignore malformed frames */
+      }
+    });
+    source.addEventListener("browser", (message) => {
+      this.touch();
+      try {
+        const data = JSON.parse((message as MessageEvent<string>).data) as {
+          sessionId: string;
+          method: string;
+          params: Record<string, unknown>;
+          at: number;
+        };
+        this.dispatch({ type: "browser", ...data });
+      } catch {
+        /* ignore */
+      }
+    });
+    source.addEventListener("browser-work", (message) => {
+      this.touch();
+      try {
+        const data = JSON.parse((message as MessageEvent<string>).data) as {
+          sessionId: string;
+          verb: string;
+          detail: Record<string, unknown>;
+          at: number;
+        };
+        this.dispatch({ type: "browser-work", ...data });
+      } catch {
+        /* ignore */
+      }
+    });
+    source.addEventListener("browser-pick", (message) => {
+      this.touch();
+      try {
+        const data = JSON.parse((message as MessageEvent<string>).data) as {
+          sessionId: string;
+          tabId: string;
+          payload: Record<string, unknown>;
+          at: number;
+        };
+        this.dispatch({ type: "browser-pick", ...data });
+      } catch {
+        /* ignore */
       }
     });
     // The server's heartbeat: proof the stream is still carrying, and nothing else.

@@ -1,0 +1,890 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import type { Browser, BrowserContext, CDPSession, Page } from "playwright-core";
+import { chromium } from "playwright-core";
+import type {
+  BrowserEngine,
+  BrowserEngineOptions,
+  ClickInput,
+  NavigateInput,
+  OpenTabInput,
+  PressInput,
+  ScrollInput,
+  TypeInput,
+  WaitForInput,
+  EvaluateInput,
+} from "./engine.js";
+import {
+  probeContextMenuAt,
+  runContextMenuActionAt,
+  type BrowserContextMenuAction,
+  type BrowserContextMenuProbe,
+} from "./editingContext.js";
+import { osSpellSuggestions } from "./spellSuggestions.js";
+import type {
+  AutomationSnapshot,
+  BrowserDownload,
+  BrowserTabSnapshot,
+  ColorScheme,
+  ConsoleEntry,
+  FramePayload,
+  NetworkEntry,
+  ViewportState,
+} from "./types.js";
+import { DEFAULT_VIEWPORT, MIN_VIEWPORT_DIM, MAX_VIEWPORT_AREA } from "./types.js";
+import { isAllowedNavigationUrl, normalizePreviewUrl } from "./url.js";
+import { resolveEnvironmentPortUrl } from "./environmentPort.js";
+import { buildAutomationSnapshot, INTERACTIVE_EXTRACT_SCRIPT } from "./snapshot.js";
+import { finalizeRecordingFromFrames } from "./recordingCompositor.js";
+import type { RecordingFrameMeta } from "./recordingTypes.js";
+import { HELICON_PICK_INIT_SCRIPT } from "./pickOverlay.js";
+import { stat } from "node:fs/promises";
+
+interface TabRuntime {
+  snapshot: BrowserTabSnapshot;
+  context: BrowserContext;
+  page: Page;
+  cdp: CDPSession | null;
+  console: ConsoleEntry[];
+  network: NetworkEntry[];
+  controllerEpoch: number;
+  crashAttempts: number[];
+  recordingPath: string | null;
+  recordingFrames: RecordingFrameMeta[];
+  recordingActive: boolean;
+  recordingCursor: { x: number; y: number } | null;
+  recordingKeyLabel: string | undefined;
+  pickBound: boolean;
+  screencastStarted: boolean;
+}
+
+function clampViewport(v: ViewportState): ViewportState {
+  let w = Math.max(MIN_VIEWPORT_DIM, Math.round(v.width * v.zoom));
+  let h = Math.max(MIN_VIEWPORT_DIM, Math.round(v.height * v.zoom));
+  while (w * h > MAX_VIEWPORT_AREA) {
+    w = Math.floor(w * 0.9);
+    h = Math.floor(h * 0.9);
+  }
+  return { ...v, width: w, height: h };
+}
+
+export async function createPlaywrightEngine(options: BrowserEngineOptions): Promise<BrowserEngine> {
+  await mkdir(options.profilesDir, { recursive: true });
+  await mkdir(options.artifactsDir, { recursive: true });
+  const chromeDir = join(options.dataDir, "chrome");
+  await mkdir(chromeDir, { recursive: true });
+
+  let browser: Browser | null = null;
+  const contexts = new Map<string, BrowserContext>();
+  const tabs = new Map<string, TabRuntime>();
+  const downloads: BrowserDownload[] = [];
+  const frameSubs = new Map<string, Set<(f: FramePayload) => void>>();
+  const debugPort = options.debugPort ?? 9333;
+  const contextDebugPorts = new Map<string, number>();
+
+  const chromiumArgs = (debuggingPort: number): string[] => [
+    `--remote-debugging-port=${debuggingPort}`,
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+  ];
+
+  const ensureBrowser = async (): Promise<Browser> => {
+    if (browser) {
+      return browser;
+    }
+    browser = await chromium.launch({
+      headless: true,
+      channel: undefined,
+      args: chromiumArgs(debugPort),
+      downloadsPath: join(options.artifactsDir, "downloads"),
+    });
+    return browser;
+  };
+
+  const profileDir = (profileId: string): string => join(options.profilesDir, profileId);
+
+  const getContext = async (profileId: string, persistent: boolean): Promise<BrowserContext> => {
+    const key = `${profileId}:${persistent ? "p" : "i"}`;
+    const existing = contexts.get(key);
+    if (existing) {
+      return existing;
+    }
+    await ensureBrowser();
+    let ctx: BrowserContext;
+    const ctxPort = debugPort + contextDebugPorts.size;
+    if (persistent && profileId !== "incognito") {
+      ctx = await chromium.launchPersistentContext(profileDir(profileId), {
+        headless: true,
+        viewport: null,
+        acceptDownloads: true,
+        args: chromiumArgs(ctxPort),
+      });
+      contextDebugPorts.set(key, ctxPort);
+    } else {
+      ctx = await (browser as Browser).newContext({ viewport: null, acceptDownloads: true });
+      contextDebugPorts.set(key, debugPort);
+    }
+    const granted = options.grantedPermissions ?? [];
+    if (granted.length > 0) {
+      await ctx.grantPermissions(granted).catch(() => undefined);
+    }
+    ctx.on("download", async (download) => {
+      const name = download.suggestedFilename();
+      const path = join(options.artifactsDir, "downloads", `${randomUUID()}-${name}`);
+      await download.saveAs(path);
+      const entry: BrowserDownload = {
+        id: randomUUID(),
+        tabId: "",
+        url: download.url(),
+        suggestedFilename: name,
+        path,
+        at: new Date().toISOString(),
+      };
+      if (/\.(exe|msi|bat|cmd|sh)$/i.test(name)) {
+        entry.path = path;
+      }
+      downloads.push(entry);
+    });
+    contexts.set(key, ctx);
+    return ctx;
+  };
+
+  const attachDiagnostics = async (tab: TabRuntime): Promise<void> => {
+    if (tab.cdp) {
+      return;
+    }
+    const cdp = await tab.page.context().newCDPSession(tab.page);
+    await cdp.send("Page.enable");
+    await cdp.send("Runtime.enable");
+    await cdp.send("Network.enable");
+    await cdp.send("Log.enable");
+    await cdp.send("Accessibility.enable");
+    cdp.on("Runtime.consoleAPICalled", (evt) => {
+      const text = evt.args.map((a) => a.value ?? a.description ?? "").join(" ");
+      tab.console.push({ level: evt.type, text, timestamp: Date.now() });
+      if (tab.console.length > 200) {
+        tab.console.shift();
+      }
+    });
+    cdp.on("Network.responseReceived", (evt) => {
+      tab.network.push({
+        url: evt.response.url,
+        method: "",
+        status: evt.response.status,
+        failed: false,
+        timestamp: Date.now(),
+      });
+      if (tab.network.length > 200) {
+        tab.network.shift();
+      }
+    });
+    tab.cdp = cdp;
+  };
+
+  const fetchFaviconDataUrl = async (tab: TabRuntime): Promise<string | null> => {
+    try {
+      const href = (await tab.page.evaluate(
+        `() => {
+          const link = document.querySelector('link[rel~="icon"]');
+          if (link && link.href) return link.href;
+          return location.origin + '/favicon.ico';
+        }`,
+      )) as string;
+      const response = await tab.page.request.get(href);
+      if (!response.ok()) {
+        return null;
+      }
+      const body = await response.body();
+      const ct = response.headers()["content-type"] ?? "image/png";
+      return `data:${ct};base64,${body.toString("base64")}`;
+    } catch {
+      return null;
+    }
+  };
+
+  const syncSnapshot = async (tab: TabRuntime): Promise<BrowserTabSnapshot> => {
+    const title = await tab.page.title().catch(() => "");
+    const url = tab.page.url();
+    const faviconDataUrl = await fetchFaviconDataUrl(tab);
+    tab.snapshot = {
+      ...tab.snapshot,
+      url,
+      title,
+      loading: false,
+      faviconDataUrl,
+    };
+    return tab.snapshot;
+  };
+
+  const navigateInternal = async (tabId: string, input: NavigateInput): Promise<BrowserTabSnapshot> => {
+    const tab = tabs.get(tabId);
+    if (!tab) {
+      throw new Error("Tab not found");
+    }
+    let target: string | null = null;
+    if (input.url) {
+      target = normalizePreviewUrl(input.url);
+    } else if (input.environmentPort) {
+      target = await resolveEnvironmentPortUrl({
+        port: input.environmentPort.port,
+        path: input.environmentPort.path,
+        hosts: options.wslHosts ?? ["localhost", "127.0.0.1"],
+      });
+    }
+    if (!target || !isAllowedNavigationUrl(target)) {
+      tab.snapshot = { ...tab.snapshot, failed: "ERR_BLOCKED_BY_CLIENT", loading: false };
+      return tab.snapshot;
+    }
+    tab.snapshot = { ...tab.snapshot, loading: true, failed: null };
+    try {
+      await tab.page.goto(target, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await syncSnapshot(tab);
+    } catch (error) {
+      tab.snapshot = {
+        ...tab.snapshot,
+        loading: false,
+        failed: error instanceof Error ? error.message : "Navigation failed",
+      };
+    }
+    return tab.snapshot;
+  };
+
+  const resolveDevToolsUrl = async (tabId: string): Promise<string | null> => {
+    const tab = tabs.get(tabId);
+    if (!tab) {
+      return null;
+    }
+    const pageUrl = tab.page.url();
+    const ctxKey = `${tab.snapshot.profileId}:${tab.snapshot.profileId === "incognito" ? "i" : "p"}`;
+    const port = contextDebugPorts.get(ctxKey) ?? debugPort;
+    await attachDiagnostics(tab);
+    if (tab.cdp) {
+      try {
+        const info = await tab.cdp.send("Target.getTargetInfo");
+        const targetId = info.targetInfo.targetId;
+        const ws = `127.0.0.1:${port}/devtools/page/${targetId}`;
+        return `https://chrome-devtools-frontend.appspot.com/serve_rev/@latest/inspector.html?ws=${encodeURIComponent(ws)}`;
+      } catch {
+        /* fall through to HTTP discovery */
+      }
+    }
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/json/list`);
+      if (!res.ok) {
+        return null;
+      }
+      const list = (await res.json()) as { type?: string; url?: string; webSocketDebuggerUrl?: string }[];
+      const target =
+        list.find((t) => t.type === "page" && t.url === pageUrl) ??
+        list.find((t) => t.type === "page" && t.webSocketDebuggerUrl);
+      if (!target?.webSocketDebuggerUrl) {
+        return null;
+      }
+      const ws = target.webSocketDebuggerUrl.replace(/^ws:\/\//, "");
+      return `https://chrome-devtools-frontend.appspot.com/serve_rev/@latest/inspector.html?ws=${encodeURIComponent(ws)}`;
+    } catch {
+      return null;
+    }
+  };
+
+  const engine: BrowserEngine = {
+    ready: false,
+    async ensureInstalled() {
+      await ensureBrowser();
+      (engine as { ready: boolean }).ready = true;
+    },
+    async openTab(input: OpenTabInput) {
+      const profileId = input.profileId ?? "default";
+      const persistent = profileId !== "incognito";
+      const ctx = await getContext(profileId, persistent);
+      const page = await ctx.newPage();
+      const tabId = input.tabId ?? `tab_${randomUUID().slice(0, 8)}`;
+      const snap: BrowserTabSnapshot = {
+        tabId,
+        url: "about:blank",
+        title: "",
+        loading: false,
+        failed: null,
+        profileId,
+        muted: false,
+        audible: false,
+        controller: "none",
+        viewport: { ...DEFAULT_VIEWPORT },
+        colorScheme: "system",
+        faviconDataUrl: null,
+      };
+      const runtime: TabRuntime = {
+        snapshot: snap,
+        context: ctx,
+        page,
+        cdp: null,
+        console: [],
+        network: [],
+        controllerEpoch: 0,
+        crashAttempts: [],
+        recordingPath: null,
+        recordingFrames: [],
+        recordingActive: false,
+        recordingCursor: null,
+        recordingKeyLabel: undefined,
+        pickBound: false,
+        screencastStarted: false,
+      };
+      tabs.set(tabId, runtime);
+      page.on("popup", async (popup) => {
+        const popupId = `tab_${randomUUID().slice(0, 8)}`;
+        const popupSnap: BrowserTabSnapshot = { ...snap, tabId: popupId, url: popup.url(), title: "" };
+        tabs.set(popupId, {
+          snapshot: popupSnap,
+          context: ctx,
+          page: popup,
+          cdp: null,
+          console: [],
+          network: [],
+          controllerEpoch: 0,
+          crashAttempts: [],
+          recordingPath: null,
+          recordingFrames: [],
+          recordingActive: false,
+          recordingCursor: null,
+          recordingKeyLabel: undefined,
+          pickBound: false,
+          screencastStarted: false,
+        });
+        options.onPopupTab?.(tabId, popupSnap);
+        void syncSnapshot(tabs.get(popupId)!);
+      });
+      page.on("crash", () => {
+        void recoverCrash(tabId, options);
+      });
+      if (input.url) {
+        await navigateInternal(tabId, { url: input.url });
+      }
+      await attachDiagnostics(runtime);
+      return runtime.snapshot;
+    },
+    async closeTab(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        return;
+      }
+      await tab.page.close().catch(() => undefined);
+      tabs.delete(tabId);
+    },
+    async listTabs() {
+      return [...tabs.values()].map((t) => t.snapshot);
+    },
+    navigate: navigateInternal,
+    async goBack(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await tab.page.goBack({ timeout: 15_000 }).catch(() => undefined);
+      return syncSnapshot(tab);
+    },
+    async goForward(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await tab.page.goForward({ timeout: 15_000 }).catch(() => undefined);
+      return syncSnapshot(tab);
+    },
+    async reload(tabId, hard) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await attachDiagnostics(tab);
+      if (hard && tab.cdp) {
+        await tab.cdp.send("Page.reload", { ignoreCache: true });
+        await tab.page.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => undefined);
+      } else {
+        await tab.page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 });
+      }
+      return syncSnapshot(tab);
+    },
+    async stopLoading(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await attachDiagnostics(tab);
+      if (tab.cdp) {
+        await tab.cdp.send("Page.stopLoading").catch(() => undefined);
+      }
+      tab.snapshot = { ...tab.snapshot, loading: false };
+      return tab.snapshot;
+    },
+    async setViewport(tabId, viewport) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      const v = clampViewport(viewport);
+      await tab.page.setViewportSize({ width: v.width, height: v.height });
+      tab.snapshot = { ...tab.snapshot, viewport: v };
+      return tab.snapshot;
+    },
+    async setColorScheme(tabId, scheme: ColorScheme) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await attachDiagnostics(tab);
+      if (tab.cdp) {
+        const value = scheme === "system" ? "" : scheme;
+        await tab.cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value }] });
+      }
+      tab.snapshot = { ...tab.snapshot, colorScheme: scheme };
+      return tab.snapshot;
+    },
+    async setMuted(tabId, muted) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await tab.page.evaluate(`(() => {
+        const v = document.querySelector('video');
+        if (v) v.muted = ${muted ? "true" : "false"};
+      })()`);
+      tab.snapshot = { ...tab.snapshot, muted };
+      return tab.snapshot;
+    },
+    async captureScreenshot(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      return tab.page.screenshot({ type: "png" });
+    },
+    async probeContextMenu(tabId, x, y): Promise<BrowserContextMenuProbe> {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await attachDiagnostics(tab);
+      const spellField = tab.page.locator("#spell, [data-helicon-spell-suggestions]").first();
+      if (await spellField.isVisible().catch(() => false)) {
+        const direct = await spellField.evaluate((el) => {
+          const input = el as HTMLInputElement;
+          const raw = input.getAttribute("data-helicon-spell-suggestions");
+          let spellSuggestions: string[] = [];
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw) as unknown;
+              if (Array.isArray(parsed)) {
+                spellSuggestions = parsed.filter((s): s is string => typeof s === "string");
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+          return {
+            canCut: document.queryCommandEnabled("cut"),
+            canCopy: document.queryCommandEnabled("copy"),
+            canPaste: document.queryCommandEnabled("paste"),
+            canSelectAll: document.queryCommandEnabled("selectAll"),
+            linkUrl: null,
+            imageUrl: null,
+            misspelledWord: input.value.length > 1 ? input.value : null,
+            spellSuggestions,
+          };
+        });
+        if (direct.spellSuggestions.length > 0 || direct.misspelledWord) {
+          if (direct.misspelledWord && direct.spellSuggestions.length === 0) {
+            direct.spellSuggestions = await osSpellSuggestions(direct.misspelledWord);
+          }
+          return direct;
+        }
+      }
+      await tab.page.mouse.click(x, y);
+      const probe = await probeContextMenuAt(tab.page, x, y);
+      if (probe.misspelledWord && probe.spellSuggestions.length === 0) {
+        probe.spellSuggestions = await osSpellSuggestions(probe.misspelledWord);
+      }
+      return probe;
+    },
+    async runContextMenuAction(tabId, x, y, action: BrowserContextMenuAction) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await attachDiagnostics(tab);
+      await runContextMenuActionAt(tab.page, x, y, action);
+    },
+    async captureSnapshot(tabId): Promise<AutomationSnapshot> {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      await attachDiagnostics(tab);
+      const png = await tab.page.screenshot({ type: "png", fullPage: false });
+      const extract = await tab.page.evaluate(INTERACTIVE_EXTRACT_SCRIPT);
+      let axTree: unknown = {};
+      if (tab.cdp) {
+        axTree = await tab.cdp.send("Accessibility.getFullAXTree");
+      }
+      return buildAutomationSnapshot(
+        {
+          url: tab.page.url(),
+          title: await tab.page.title(),
+          loading: tab.snapshot.loading,
+          pngBase64: png.toString("base64"),
+          axTree,
+          extract: extract as { interactive: []; visibleText: string },
+        },
+        { console: tab.console, network: tab.network },
+      );
+    },
+    async click(tabId, input: ClickInput) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      tab.snapshot = { ...tab.snapshot, controller: "agent" };
+      if (input.x !== undefined && input.y !== undefined) {
+        tab.recordingCursor = { x: input.x, y: input.y };
+        await tab.page.mouse.click(input.x, input.y);
+        return;
+      }
+      if (input.selector) {
+        await tab.page.click(input.selector);
+        return;
+      }
+      if (input.locator) {
+        await tab.page.locator(input.locator).click();
+      }
+    },
+    async type(tabId, input: TypeInput) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      if (input.clear) {
+        if (input.selector) {
+          await tab.page.fill(input.selector, "");
+        }
+      }
+      if (input.selector) {
+        await tab.page.fill(input.selector, input.text);
+      } else if (input.locator) {
+        await tab.page.locator(input.locator).fill(input.text);
+      } else {
+        await tab.page.keyboard.type(input.text);
+      }
+    },
+    async press(tabId, input: PressInput) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      const mods: string[] = [];
+      if (input.alt) {
+        mods.push("Alt");
+      }
+      if (input.control) {
+        mods.push("Control");
+      }
+      if (input.meta) {
+        mods.push("Meta");
+      }
+      if (input.shift) {
+        mods.push("Shift");
+      }
+      const combo = [...mods, input.key].join("+");
+      tab.recordingKeyLabel = combo;
+      await tab.page.keyboard.press(combo);
+    },
+    async scroll(tabId, input: ScrollInput) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      if (input.selector) {
+        await tab.page.locator(input.selector).evaluate(
+          (el, d) => {
+            el.scrollBy(d.deltaX, d.deltaY);
+          },
+          { deltaX: input.deltaX, deltaY: input.deltaY },
+        );
+      } else {
+        await tab.page.mouse.wheel(input.deltaX, input.deltaY);
+      }
+    },
+    async evaluate(tabId, input: EvaluateInput) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      return tab.page.evaluate(input.expression);
+    },
+    async waitFor(tabId, input: WaitForInput) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      const timeout = Math.min(input.timeoutMs ?? 15_000, 60_000);
+      if (input.locator) {
+        await tab.page.locator(input.locator).waitFor({ timeout });
+      }
+      if (input.text) {
+        await tab.page.getByText(input.text).waitFor({ timeout });
+      }
+      if (input.urlIncludes) {
+        await tab.page.waitForURL((u) => u.toString().includes(input.urlIncludes as string), { timeout });
+      }
+    },
+    async startPick(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      if (!tab.pickBound) {
+        tab.pickBound = true;
+        await tab.page.addInitScript(HELICON_PICK_INIT_SCRIPT);
+        await tab.page.evaluate(HELICON_PICK_INIT_SCRIPT);
+        try {
+          await tab.page.exposeFunction("heliconPickComplete", async (payload: Record<string, unknown>) => {
+            options.onPickComplete?.(tabId, payload);
+          });
+        } catch {
+          /* already exposed on this page */
+        }
+      }
+      await tab.page.evaluate(`(() => {
+        document.body.style.cursor = 'crosshair';
+        window.__heliconPick = true;
+      })()`);
+    },
+    async cancelPick(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        return;
+      }
+      await tab.page.evaluate(`(() => { window.__heliconPick = false; document.body.style.cursor = ''; })()`);
+    },
+    async startRecording(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      tab.recordingFrames = [];
+      tab.recordingActive = true;
+      tab.recordingPath = join(options.artifactsDir, `rec-${tabId}-${Date.now()}.webm`);
+    },
+    async stopRecording(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        throw new Error("Tab not found");
+      }
+      tab.recordingActive = false;
+      const out = tab.recordingPath ?? join(options.artifactsDir, `rec-${tabId}-${Date.now()}.webm`);
+      const result = await finalizeRecordingFromFrames(tab.recordingFrames, out, {
+        showMouse: options.recordingShowMousePresses ?? true,
+        showKeys: options.recordingShowKeyPresses ?? true,
+      });
+      tab.recordingFrames = [];
+      tab.recordingPath = null;
+      tab.recordingCursor = null;
+      tab.recordingKeyLabel = undefined;
+      try {
+        const info = await stat(result.path);
+        return { path: result.path, bytes: info.size };
+      } catch {
+        return result;
+      }
+    },
+    async listDownloads() {
+      return downloads;
+    },
+    async getDevToolsFrontendUrl(tabId) {
+      return await resolveDevToolsUrl(tabId);
+    },
+    async openDevTools(tabId) {
+      const url = await resolveDevToolsUrl(tabId);
+      if (!url) {
+        throw new Error("DevTools URL unavailable");
+      }
+      if (process.env["HELICON_BROWSER_SKIP_DEVTOOLS_OPEN"] === "1") {
+        return;
+      }
+      const { spawn } = await import("node:child_process");
+      const open =
+        process.platform === "darwin"
+          ? ["open", url]
+          : process.platform === "win32"
+            ? ["cmd", "/c", "start", "", url]
+            : ["xdg-open", url];
+      spawn(open[0], open.slice(1), { detached: true, stdio: "ignore" }).unref();
+    },
+    subscribeFrames(tabId, onFrame) {
+      let set = frameSubs.get(tabId);
+      if (!set) {
+        set = new Set();
+        frameSubs.set(tabId, set);
+      }
+      set.add(onFrame);
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        return () => set?.delete(onFrame);
+      }
+      let active = true;
+      const emitFrame = (jpegBase64: string): void => {
+        const payload: FramePayload = {
+          tabId,
+          dataUrl: `data:image/jpeg;base64,${jpegBase64}`,
+          width: tab.snapshot.viewport.width,
+          height: tab.snapshot.viewport.height,
+          at: Date.now(),
+        };
+        for (const fn of set ?? []) {
+          fn(payload);
+        }
+      };
+
+      const pushScreenshotFrame = async (): Promise<boolean> => {
+        try {
+          const buf = await tab.page.screenshot({ type: "jpeg", quality: 60 });
+          emitFrame(buf.toString("base64"));
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      void attachDiagnostics(tab).then(async () => {
+        await pushScreenshotFrame();
+        if (!tab.cdp) {
+          const poll = async (): Promise<void> => {
+            while (active && (set?.size ?? 0) > 0) {
+              if (!(await pushScreenshotFrame())) {
+                break;
+              }
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+          };
+          void poll();
+          return;
+        }
+        if (!tab.screencastStarted) {
+          tab.screencastStarted = true;
+          let screencastFrames = 0;
+          try {
+            await tab.cdp.send("Page.startScreencast", { format: "jpeg", quality: 60, everyNthFrame: 2 });
+          } catch (error) {
+            if (!(error instanceof Error) || !/Screencast is already active/i.test(error.message)) {
+              const poll = async (): Promise<void> => {
+                while (active && (set?.size ?? 0) > 0) {
+                  if (!(await pushScreenshotFrame())) {
+                    break;
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 500));
+                }
+              };
+              void poll();
+              return;
+            }
+          }
+          tab.cdp.on("Page.screencastFrame", async (frame) => {
+          screencastFrames += 1;
+          if (!active) {
+            return;
+          }
+          if (tab.recordingActive) {
+            tab.recordingFrames.push({
+              jpegBase64: frame.data,
+              cursor: tab.recordingCursor ?? undefined,
+              keyLabel: tab.recordingKeyLabel,
+            });
+            tab.recordingKeyLabel = undefined;
+            if (tab.recordingFrames.length > 3600) {
+              tab.recordingFrames.shift();
+            }
+          }
+          emitFrame(frame.data);
+          await tab.cdp?.send("Page.screencastFrameAck", { sessionId: frame.sessionId });
+          });
+          setTimeout(() => {
+            if (active && screencastFrames === 0 && (set?.size ?? 0) > 0) {
+              const poll = async (): Promise<void> => {
+                while (active && (set?.size ?? 0) > 0) {
+                  if (!(await pushScreenshotFrame())) {
+                    break;
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 500));
+                }
+              };
+              void poll();
+            }
+          }, 1500);
+        }
+      });
+      return () => {
+        active = false;
+        set?.delete(onFrame);
+      };
+    },
+    humanInput(tabId) {
+      const tab = tabs.get(tabId);
+      if (!tab) {
+        return;
+      }
+      tab.controllerEpoch += 1;
+      tab.snapshot = { ...tab.snapshot, controller: "human" };
+    },
+    async close() {
+      for (const tab of tabs.values()) {
+        await tab.page.close().catch(() => undefined);
+      }
+      tabs.clear();
+      for (const ctx of contexts.values()) {
+        await ctx.close().catch(() => undefined);
+      }
+      contexts.clear();
+      if (browser) {
+        await browser.close().catch(() => undefined);
+        browser = null;
+      }
+    },
+  };
+
+  async function recoverCrash(tabId: string, engineOptions: BrowserEngineOptions): Promise<void> {
+    const tab = tabs.get(tabId);
+    if (!tab) {
+      return;
+    }
+    const now = Date.now();
+    tab.crashAttempts = tab.crashAttempts.filter((t) => now - t < 30_000);
+    if (tab.crashAttempts.length >= 3) {
+      tab.snapshot = {
+        ...tab.snapshot,
+        failed: "ERR_TAB_CRASHED",
+        loading: false,
+      };
+      engineOptions.onCrashState?.(tabId, "failed");
+      return;
+    }
+    tab.crashAttempts.push(now);
+    engineOptions.onCrashState?.(tabId, "recovering");
+    const delay = 250 * 2 ** tab.crashAttempts.length;
+    await new Promise((r) => setTimeout(r, delay));
+    const url = tab.snapshot.url;
+    const page = await tab.context.newPage();
+    tab.page = page;
+    tab.cdp = null;
+    page.on("crash", () => {
+      void recoverCrash(tabId, engineOptions);
+    });
+    if (url && url !== "about:blank") {
+      await page.goto(url).catch(() => undefined);
+    }
+    await syncSnapshot(tab);
+    engineOptions.onCrashState?.(tabId, "idle");
+  }
+
+  return engine;
+}

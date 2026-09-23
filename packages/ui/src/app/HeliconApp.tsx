@@ -36,12 +36,22 @@ export interface HeliconAppProps {
   updater?: AppUpdater;
   /** How this shell raises a system notification; absent where it cannot. */
   notifier?: Notifier;
+  /** Opens the always-on-top browser PiP window (desktop shell). */
+  openBrowserPip?: (pipUrl: string) => Promise<void>;
+  /** Opens the current preview URL in the OS default browser (desktop shell). */
+  openBrowserExternal?: (url: string) => Promise<void>;
 }
 
 /** The whole Helicon interface. Web and desktop shells mount this with their transport. */
 export function HeliconApp(props: HeliconAppProps) {
   const [controller] = useState(() => {
     const created = new HeliconController(props.client, props.platform);
+    if (props.openBrowserPip) {
+      created.setBrowserPipOpener(props.openBrowserPip);
+    }
+    if (props.openBrowserExternal) {
+      created.setBrowserExternalOpener(props.openBrowserExternal);
+    }
     if (props.updater) {
       created.attachUpdater(props.updater);
     }
@@ -79,7 +89,9 @@ function ThemeSync() {
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
-      document.documentElement.dataset["theme"] = theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      const resolved = theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      document.documentElement.setAttribute("data-theme", resolved);
+      document.documentElement.style.colorScheme = resolved;
     };
     apply();
     if (theme !== "system") {
@@ -153,6 +165,9 @@ function GlobalShortcuts() {
       } else if (mod && event.shiftKey && !event.altKey && key === "e") {
         event.preventDefault();
         controller.toggleFiles();
+      } else if (mod && event.shiftKey && !event.altKey && key === "b") {
+        event.preventDefault();
+        controller.toggleBrowser();
       } else if (event.altKey && !mod && (event.key === "ArrowUp" || event.key === "ArrowDown") && !isTyping(event.target)) {
         const state = controller.store.get();
         const ordered = Object.values(state.sessions).sort((a, b) => (a.activityAt < b.activityAt ? 1 : -1));
@@ -174,11 +189,19 @@ function GlobalShortcuts() {
         applyZoomStep(controller, step);
       }
     };
+    const onSnapshot = (event: Event) => {
+      const png = (event as CustomEvent<{ pngBase64: string }>).detail?.pngBase64;
+      if (png) {
+        controller.attachOsSnapshot(png);
+      }
+    };
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("helicon-zoom-step", onMenuZoom);
+    window.addEventListener("helicon-os-snapshot", onSnapshot);
     return () => {
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("helicon-zoom-step", onMenuZoom);
+      window.removeEventListener("helicon-os-snapshot", onSnapshot);
     };
   }, [controller]);
   return null;

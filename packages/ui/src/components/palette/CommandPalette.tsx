@@ -1,5 +1,5 @@
 import { Command } from "cmdk";
-import { ArrowClockwiseIcon, ArrowCounterClockwiseIcon, ArrowsClockwiseIcon, FolderIcon, FolderPlusIcon, MagnifyingGlassIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, MonitorIcon, MoonIcon, NotePencilIcon, ShieldSlashIcon, SidebarSimpleIcon, StackIcon, SunIcon } from "../ui/icons.js";
+import { ArrowClockwiseIcon, ArrowCounterClockwiseIcon, ArrowsClockwiseIcon, FolderIcon, FolderPlusIcon, GlobeIcon, MagnifyingGlassIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, MonitorIcon, MoonIcon, NotePencilIcon, ShieldSlashIcon, SidebarSimpleIcon, StackIcon, SunIcon } from "../ui/icons.js";
 import { useMemo, type ReactNode } from "react";
 import { useApp, useController, useNow } from "../../app/context.js";
 import { basename, relativeTime } from "../../model/format.js";
@@ -39,6 +39,8 @@ export function CommandPalette() {
     () => Object.values(sessions).sort((a, b) => (a.activityAt < b.activityAt ? 1 : -1)),
     [sessions],
   );
+
+  const activeThread = useApp((s) => (s.route.kind === "thread" ? s.route.sessionId : null));
 
   const run = (action: () => void) => {
     controller.setPaletteOpen(false);
@@ -84,6 +86,25 @@ export function CommandPalette() {
             <Item value="Toggle sidebar" icon={<SidebarSimpleIcon size={15} />} onSelect={() => run(() => controller.toggleSidebar())} hint={<Shortcut keys={[MOD, "B"]} />}>
               Toggle sidebar
             </Item>
+            <Item
+              value="Open browser panel"
+              keywords={["preview", "web"]}
+              icon={<GlobeIcon size={15} />}
+              onSelect={() => run(() => controller.toggleBrowser(true))}
+              hint={<Shortcut keys={[MOD, "Shift", "B"]} />}
+            >
+              Open browser panel
+            </Item>
+            {activeThread ? (
+              <Item
+                value="New browser tab"
+                keywords={["preview"]}
+                icon={<GlobeIcon size={15} />}
+                onSelect={() => run(() => void controller.openBrowserTab(activeThread))}
+              >
+                New browser tab
+              </Item>
+            ) : null}
             <Item value="Theme system" keywords={["appearance"]} icon={<MonitorIcon size={15} />} onSelect={() => run(() => controller.setTheme("system"))}>
               Use system theme
             </Item>

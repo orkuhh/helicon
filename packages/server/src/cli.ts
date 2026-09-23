@@ -46,11 +46,13 @@ async function main(): Promise<void> {
     return;
   }
   const { HeliconServer } = await import("./server.js");
+  const testMuse = process.env["HELICON_TEST_MUSE"] === "1";
   const portRaw = flagValue(argv, "--port");
   const dataDir = flagValue(argv, "--data-dir") ?? join(homedir(), ".helicon");
   if (dataDir !== ":memory:") {
     mkdirSync(dataDir, { recursive: true });
   }
+  const testHost = testMuse ? await import("./testMuseHost.js") : null;
   const server = new HeliconServer({
     port: portRaw ? Number.parseInt(portRaw, 10) : 3127,
     host: flagValue(argv, "--host") ?? "127.0.0.1",
@@ -61,6 +63,9 @@ async function main(): Promise<void> {
     distro: flagValue(argv, "--distro") ?? undefined,
     runtime: parseRuntimePreference(flagValue(argv, "--runtime") ?? process.env["HELICON_MUSE_RUNTIME"]),
     musePath: flagValue(argv, "--muse") ?? undefined,
+    ...(testHost
+      ? { hostFactory: testHost.testMuseHostFactory, exec: testHost.testMuseExec, musePath: "muse" }
+      : {}),
   });
   const bound = await server.listen();
   process.stdout.write(`helicon-server listening on http://${bound.host}:${bound.port}\n`);

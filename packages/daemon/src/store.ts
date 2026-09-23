@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import type { BrowserDefaults } from "@helicon/browser";
+import { DEFAULT_BROWSER_DEFAULTS } from "@helicon/browser";
 
 export interface Project {
   id: number;
@@ -198,6 +200,28 @@ CREATE INDEX IF NOT EXISTS idx_usage_at ON usage(at);
 CREATE INDEX IF NOT EXISTS idx_usage_session ON usage(session_id);
 CREATE INDEX IF NOT EXISTS idx_turns_session ON turns(session_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_session ON attachments(session_id, turn_id);
+CREATE TABLE IF NOT EXISTS browser_profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  persistent INTEGER NOT NULL DEFAULT 1,
+  built_in INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS browser_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_cwd TEXT NOT NULL,
+  url TEXT NOT NULL,
+  title TEXT,
+  used_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS browser_tab_restore (
+  session_id TEXT NOT NULL,
+  tab_id TEXT NOT NULL,
+  url TEXT NOT NULL,
+  profile_id TEXT NOT NULL DEFAULT 'default',
+  PRIMARY KEY (session_id, tab_id)
+);
+CREATE INDEX IF NOT EXISTS idx_browser_history_project ON browser_history(project_cwd, used_at DESC);
 `;
 
 /** Columns added after the first release; applied in place so existing databases keep their data. */
@@ -764,6 +788,120 @@ export class HeliconStore {
     this.db
       .prepare(`UPDATE turns SET status = ?, updated_at = ? WHERE id = ?`)
       .run(status, nowIso(), id);
+  }
+
+  getBrowserDefaults(): BrowserDefaults {
+    const row = this.db.prepare(`SELECT value FROM settings WHERE key = 'browser_defaults'`).get() as Row | undefined;
+    if (!row) {
+      return { ...DEFAULT_BROWSER_DEFAULTS };
+    }
+    try {
+      const parsed = JSON.parse(String(row["value"])) as Partial<BrowserDefaults>;
+      return {
+        ...DEFAULT_BROWSER_DEFAULTS,
+        ...parsed,
+        viewport: { ...DEFAULT_BROWSER_DEFAULTS.viewport, ...(parsed.viewport ?? {}) },
+        grantedPermissions: parsed.grantedPermissions ?? DEFAULT_BROWSER_DEFAULTS.grantedPermissions,
+      };
+    } catch {
+      return { ...DEFAULT_BROWSER_DEFAULTS };
+    }
+  }
+
+  setBrowserDefaults(patch: Partial<BrowserDefaults>): BrowserDefaults {
+    const current = this.getBrowserDefaults();
+    const next: BrowserDefaults = {
+      ...current,
+      ...patch,
+      viewport: { ...current.viewport, ...(patch.viewport ?? {}) },
+    };
+    this.db
+      .prepare(`INSERT INTO settings (key, value) VALUES ('browser_defaults', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+      .run(JSON.stringify(next));
+    return next;
+  }
+
+  pushBrowserHistory(sessionId: string, url: string, title: string): void {
+    const found = this.findSession(sessionId);
+    if (!found) {
+      return;
+    }
+    const now = nowIso();
+    this.db
+      .prepare(`INSERT INTO browser_history (project_cwd, url, title, used_at) VALUES (?, ?, ?, ?)`)
+      .run(found.cwd, url.slice(0, 2048), title.slice(0, 512), now);
+    const count = this.db.prepare(`SELECT COUNT(*) AS c FROM browser_history WHERE project_cwd = ?`).get(found.cwd) as Row;
+    const extra = Number(count["c"] ?? 0) - 50;
+    if (extra > 0) {
+      this.db
+        .prepare(
+          `DELETE FROM browser_history WHERE id IN (
+            SELECT id FROM browser_history WHERE project_cwd = ? ORDER BY used_at ASC LIMIT ?
+          )`,
+        )
+        .run(found.cwd, extra);
+    }
+  }
+
+  removeBrowserHistory(projectCwd: string, url: string): void {
+    this.db.prepare(`DELETE FROM browser_history WHERE project_cwd = ? AND url = ?`).run(projectCwd, url);
+  }
+
+  listBrowserHistory(projectCwd: string, limit = 20): { url: string; title: string | null; usedAt: string }[] {
+    const rows = this.db
+      .prepare(`SELECT url, title, used_at FROM browser_history WHERE project_cwd = ? ORDER BY used_at DESC LIMIT ?`)
+      .all(projectCwd, limit) as Row[];
+    return rows.map((r) => ({
+      url: String(r["url"]),
+      title: r["title"] === null ? null : String(r["title"]),
+      usedAt: String(r["used_at"]),
+    }));
+  }
+
+  rememberBrowserTab(sessionId: string, tabId: string, url: string, profileId = "default"): void {
+    this.db
+      .prepare(
+        `INSERT INTO browser_tab_restore (session_id, tab_id, url, profile_id) VALUES (?, ?, ?, ?)
+         ON CONFLICT(session_id, tab_id) DO UPDATE SET url = excluded.url, profile_id = excluded.profile_id`,
+      )
+      .run(sessionId, tabId, url, profileId);
+  }
+
+  forgetBrowserTab(sessionId: string, tabId: string): void {
+    this.db.prepare(`DELETE FROM browser_tab_restore WHERE session_id = ? AND tab_id = ?`).run(sessionId, tabId);
+  }
+
+  listBrowserProfiles(): { id: string; name: string; persistent: boolean; builtIn: boolean }[] {
+    const rows = this.db.prepare(`SELECT id, name, persistent, built_in FROM browser_profiles ORDER BY created_at`).all() as Row[];
+    if (rows.length === 0) {
+      return [
+        { id: "default", name: "Default", persistent: true, builtIn: true },
+        { id: "incognito", name: "Incognito", persistent: false, builtIn: true },
+      ];
+    }
+    return rows.map((r) => ({
+      id: String(r["id"]),
+      name: String(r["name"]),
+      persistent: Number(r["persistent"]) === 1,
+      builtIn: Number(r["built_in"]) === 1,
+    }));
+  }
+
+  createBrowserProfile(id: string, name: string): void {
+    this.db
+      .prepare(`INSERT OR IGNORE INTO browser_profiles (id, name, persistent, built_in, created_at) VALUES (?, ?, 1, 0, ?)`)
+      .run(id, name.slice(0, 48), nowIso());
+  }
+
+  listBrowserTabRestore(sessionId: string): { tabId: string; url: string; profileId: string }[] {
+    const rows = this.db
+      .prepare(`SELECT tab_id, url, profile_id FROM browser_tab_restore WHERE session_id = ?`)
+      .all(sessionId) as Row[];
+    return rows.map((r) => ({
+      tabId: String(r["tab_id"]),
+      url: String(r["url"]),
+      profileId: String(r["profile_id"] ?? "default"),
+    }));
   }
 
   close(): void {

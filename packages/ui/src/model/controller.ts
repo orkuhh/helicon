@@ -43,6 +43,8 @@ import {
   type ThreadFold,
 } from "./fold.js";
 import {
+  BROWSER_WIDTH_MAX,
+  BROWSER_WIDTH_MIN,
   FILES_WIDTH_MAX,
   FILES_WIDTH_MIN,
   Store,
@@ -64,6 +66,7 @@ import {
   type ThreadState,
   type Toast,
 } from "./store.js";
+import { emptyBrowserSession } from "./browser.js";
 import { NotificationManager, type Notifier } from "./notify.js";
 import { UpdateManager, type AppUpdater } from "./updates.js";
 
@@ -447,6 +450,7 @@ export class HeliconController {
       await this.refresh();
       this.update((s) => ({ ...s, boot: "ready" }));
       this.applyRoute(hashToRoute(this.platform.readHash()), false);
+      this.reconcileBrowserRoute();
       void this.discoverAll(true);
       void this.loadModels();
       void this.loadTitleSettings();
@@ -795,6 +799,61 @@ export class HeliconController {
       }
       case "shell-run":
         this.addShellRun(event.sessionId, event.run);
+        break;
+      case "browser": {
+        if (event.method === "browser.crash") {
+          const tabId = String(event.params["tabId"] ?? "");
+          const phase = String(event.params["phase"] ?? "idle");
+          this.patchBrowser(event.sessionId, (b) => ({
+            ...b,
+            crashRecovery:
+              phase === "idle" ? null : { tabId, phase: phase as "recovering" | "failed" },
+            loading: phase === "recovering",
+          }));
+          if (phase === "failed") {
+            this.toast("error", "Browser tab crashed", "Too many crashes in a short time. Reload to try again.");
+          }
+          break;
+        }
+        const tab = event.params["tab"] as import("../types.js").BrowserTabSnapshot | undefined;
+        if (tab) {
+          this.patchBrowser(event.sessionId, (b) => ({
+            ...b,
+            tabs: b.tabs.some((t) => t.tabId === tab.tabId)
+              ? b.tabs.map((t) => (t.tabId === tab.tabId ? tab : t))
+              : [...b.tabs, tab],
+            activeTabId: b.activeTabId ?? tab.tabId,
+            loading: false,
+            unreachable: tab.failed,
+            miniPlayerOpen: b.defaults?.autoShowFloatingPreview ? true : b.miniPlayerOpen,
+            crashRecovery:
+              b.crashRecovery?.tabId === tab.tabId && !tab.failed ? null : b.crashRecovery,
+          }));
+        }
+        break;
+      }
+      case "browser-work":
+        this.patchBrowser(event.sessionId, (b) => {
+          const next = {
+            ...b,
+            workLog: [...b.workLog, { verb: event.verb, detail: event.detail, at: event.at }].slice(-200),
+            controller: event.verb.startsWith("preview_") ? "agent" : b.controller,
+            agentCursor: event.verb === "preview_click" && typeof event.detail["x"] === "number"
+              ? { x: event.detail["x"] as number, y: event.detail["y"] as number, visible: true }
+              : b.agentCursor,
+          };
+          if (b.defaults?.autoShowFloatingPreview && event.verb.startsWith("preview_")) {
+            next.miniPlayerOpen = true;
+          }
+          return next;
+        });
+        break;
+      case "browser-pick":
+        this.patchBrowser(event.sessionId, (b) => ({
+          ...b,
+          pickActive: false,
+          pendingPick: { tabId: event.tabId, payload: event.payload },
+        }));
         break;
       case "sessions-changed":
         this.scheduleRefresh();
@@ -2391,6 +2450,17 @@ export class HeliconController {
         return true;
       case "init":
         return this.deliver(INIT_PROMPT, { ...options, displayText: typed });
+      case "browser": {
+        if (!sessionId) {
+          return false;
+        }
+        this.toggleBrowser(true);
+        this.setRightSideTab("browser");
+        if (args.trim()) {
+          void this.openBrowserTab(sessionId, args.trim());
+        }
+        return true;
+      }
       case "goal": {
         if (!args) {
           this.toast("info", "Add the goal after /goal", "For example: /goal get the test suite passing");
@@ -2804,6 +2874,450 @@ export class HeliconController {
     this.setPrefs({ sidebarCollapsed: !this.state.prefs.sidebarCollapsed });
   }
 
+  // ---------------------------------------------------------------- browser
+
+  private pickRecentSessionId(): string | null {
+    const sessions = Object.values(this.state.sessions)
+      .filter((s) => !s.archived)
+      .sort((a, b) => (a.activityAt < b.activityAt ? 1 : -1));
+    return sessions[0]?.sessionId ?? null;
+  }
+
+  /** Browser panel only renders on a thread route; prefs can outlive the current route after reload. */
+  private reconcileBrowserRoute(): void {
+    if (!this.state.prefs.browserOpen) {
+      return;
+    }
+    let sessionId: string | null = this.state.route.kind === "thread" ? this.state.route.sessionId : null;
+    if (!sessionId) {
+      sessionId = this.pickRecentSessionId();
+      if (sessionId) {
+        this.openThread(sessionId);
+      }
+    }
+    if (sessionId) {
+      void this.ensureBrowser(sessionId);
+    }
+  }
+
+  toggleBrowser(open?: boolean): void {
+    const next = open ?? !this.state.prefs.browserOpen;
+    let sessionId: string | null = this.state.route.kind === "thread" ? this.state.route.sessionId : null;
+    if (next && !sessionId) {
+      sessionId = this.pickRecentSessionId();
+      if (sessionId) {
+        this.openThread(sessionId);
+      }
+    }
+    this.setPrefs({ browserOpen: next, rightSideTab: next ? "browser" : this.state.prefs.rightSideTab });
+    if (next && sessionId) {
+      void this.ensureBrowser(sessionId);
+    }
+  }
+
+  setBrowserMiniPlayer(sessionId: string, open: boolean): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, miniPlayerOpen: open }));
+  }
+
+  setRightSideTab(tab: "files" | "browser"): void {
+    this.setPrefs({
+      rightSideTab: tab,
+      filesOpen: tab === "files" ? true : this.state.prefs.filesOpen,
+      browserOpen: tab === "browser" ? true : this.state.prefs.browserOpen,
+    });
+    if (tab === "browser") {
+      let sessionId: string | null = this.state.route.kind === "thread" ? this.state.route.sessionId : null;
+      if (!sessionId) {
+        sessionId = this.pickRecentSessionId();
+        if (sessionId) {
+          this.openThread(sessionId);
+        }
+      }
+      if (sessionId) {
+        void this.ensureBrowser(sessionId);
+      }
+    }
+  }
+
+  setBrowserWidth(width: number): void {
+    this.setPrefs({ browserWidth: Math.round(Math.min(BROWSER_WIDTH_MAX, Math.max(BROWSER_WIDTH_MIN, width))) });
+  }
+
+  private patchBrowser(sessionId: string, fn: (state: import("./browser.js").BrowserSessionState) => import("./browser.js").BrowserSessionState): void {
+    this.update((s) => {
+      const current = s.browser[sessionId] ?? emptyBrowserSession();
+      return { ...s, browser: { ...s.browser, [sessionId]: fn(current) } };
+    });
+  }
+
+  async ensureBrowser(sessionId: string): Promise<void> {
+    try {
+      const [tabs, servers, defaults, history] = await Promise.all([
+        this.client.listBrowserTabs(sessionId),
+        this.client.listDiscoveredServers(),
+        this.client.getBrowserDefaults(),
+        this.client.listBrowserHistory(sessionId),
+      ]);
+      let resolvedTabs = tabs;
+      let activeTabId = tabs[0]?.tabId ?? null;
+      if (resolvedTabs.length === 0) {
+        const created = await this.client.openBrowserTab(sessionId);
+        resolvedTabs = [created];
+        activeTabId = created.tabId;
+      }
+      this.patchBrowser(sessionId, (b) => ({
+        ...b,
+        tabs: resolvedTabs,
+        activeTabId,
+        discovered: servers,
+        defaults,
+        history,
+        loading: false,
+      }));
+      if (activeTabId) {
+        this.attachBrowserStream(sessionId, activeTabId);
+      }
+    } catch (error) {
+      this.toast("error", "Browser unavailable", errorMessage(error));
+    }
+  }
+
+  async submitBrowserUrl(sessionId: string, url: string): Promise<void> {
+    const trimmed = url.trim();
+    if (!trimmed) {
+      return;
+    }
+    const state = this.state.browser[sessionId];
+    const tabId = state?.activeTabId ?? state?.tabs[0]?.tabId ?? null;
+    if (!tabId) {
+      await this.openBrowserTab(sessionId, trimmed);
+      return;
+    }
+    await this.navigateBrowser(sessionId, tabId, trimmed);
+  }
+
+  private frameSources = new Map<string, EventSource>();
+
+  private attachBrowserStream(sessionId: string, tabId: string): void {
+    const key = `${sessionId}:${tabId}`;
+    this.frameSources.get(key)?.close();
+    const source = new EventSource(this.client.browserStreamUrl(sessionId, tabId), { withCredentials: true });
+    source.addEventListener("frame", (message) => {
+      try {
+        const frame = JSON.parse((message as MessageEvent<string>).data) as { dataUrl: string };
+        this.patchBrowser(sessionId, (b) => ({ ...b, frameDataUrl: frame.dataUrl }));
+      } catch {
+        /* ignore */
+      }
+    });
+    this.frameSources.set(key, source);
+  }
+
+  setBrowserTab(sessionId: string, tabId: string): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, activeTabId: tabId }));
+    this.attachBrowserStream(sessionId, tabId);
+  }
+
+  async openBrowserTab(sessionId: string, url?: string): Promise<void> {
+    try {
+      const tab = await this.client.openBrowserTab(sessionId, url);
+      this.patchBrowser(sessionId, (b) => ({
+        ...b,
+        tabs: [...b.tabs, tab],
+        activeTabId: tab.tabId,
+      }));
+      this.setPrefs({ browserOpen: true, rightSideTab: "browser" });
+      this.attachBrowserStream(sessionId, tab.tabId);
+    } catch (error) {
+      this.toast("error", "Could not open browser tab", errorMessage(error));
+    }
+  }
+
+  async navigateBrowser(sessionId: string, tabId: string, url: string): Promise<void> {
+    this.patchBrowser(sessionId, (b) => ({ ...b, loading: true }));
+    try {
+      const tab = await this.client.navigateBrowserTab(sessionId, tabId, url);
+      this.patchBrowser(sessionId, (b) => ({
+        ...b,
+        tabs: b.tabs.map((t) => (t.tabId === tabId ? tab : t)),
+        loading: false,
+        unreachable: tab.failed,
+      }));
+      if (tab.failed) {
+        this.toast("error", "Page failed to load", tab.failed);
+      }
+    } catch (error) {
+      this.patchBrowser(sessionId, (b) => ({ ...b, loading: false }));
+      this.toast("error", "Navigation failed", errorMessage(error));
+    }
+  }
+
+  async reloadBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    const tab = await this.client.reloadBrowserTab(sessionId, tabId);
+    this.patchBrowser(sessionId, (b) => ({
+      ...b,
+      tabs: b.tabs.map((t) => (t.tabId === tabId ? tab : t)),
+    }));
+  }
+
+  async closeBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    await this.client.closeBrowserTab(sessionId, tabId);
+    this.frameSources.get(`${sessionId}:${tabId}`)?.close();
+    this.patchBrowser(sessionId, (b) => {
+      const tabs = b.tabs.filter((t) => t.tabId !== tabId);
+      return { ...b, tabs, activeTabId: tabs[0]?.tabId ?? null };
+    });
+  }
+
+  browserHumanInput(sessionId: string, tabId: string): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, controller: "human" }));
+  }
+
+  private browserPipOpener: ((pipUrl: string) => Promise<void>) | null = null;
+
+  setBrowserPipOpener(opener: (pipUrl: string) => Promise<void>): void {
+    this.browserPipOpener = opener;
+  }
+
+  private browserExternalOpener: ((url: string) => Promise<void>) | null = null;
+
+  setBrowserExternalOpener(opener: (url: string) => Promise<void>): void {
+    this.browserExternalOpener = opener;
+  }
+
+  async openBrowserUrlExternally(url: string): Promise<void> {
+    if (this.browserExternalOpener) {
+      await this.browserExternalOpener(url);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  private applyBrowserTab(sessionId: string, tab: import("../types.js").BrowserTabSnapshot): void {
+    this.patchBrowser(sessionId, (b) => ({
+      ...b,
+      tabs: b.tabs.some((t) => t.tabId === tab.tabId)
+        ? b.tabs.map((t) => (t.tabId === tab.tabId ? tab : t))
+        : [...b.tabs, tab],
+      activeTabId: b.activeTabId ?? tab.tabId,
+      loading: tab.loading,
+    }));
+  }
+
+  dismissBrowserPick(sessionId: string): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, pendingPick: null }));
+  }
+
+  async submitBrowserPickAnnotation(sessionId: string, comment: string): Promise<void> {
+    const pending = this.state.browser[sessionId]?.pendingPick;
+    if (!pending) {
+      return;
+    }
+    const merged = { ...pending.payload, text: comment.trim() || pending.payload["text"] };
+    await this.client.submitBrowserPickAnnotation(sessionId, pending.tabId, merged);
+    this.attachBrowserPick(sessionId, merged);
+    this.patchBrowser(sessionId, (b) => ({ ...b, pendingPick: null }));
+  }
+
+  attachBrowserPick(sessionId: string, payload: Record<string, unknown>): void {
+    const png = typeof payload["pngBase64"] === "string" ? payload["pngBase64"] : null;
+    const label =
+      typeof payload["text"] === "string" && payload["text"]
+        ? payload["text"]
+        : typeof payload["selector"] === "string"
+          ? payload["selector"]
+          : "element";
+    const attachments: OutgoingAttachment[] = png
+      ? [{ name: "browser-pick.png", mediaType: "image/png", base64: png }]
+      : [];
+    const text = `Annotate this part of the page (${label})`;
+    this.update((s) => ({ ...s, draftHandoff: { key: sessionId, text, attachments, previews: [] } }));
+    this.toast("info", "Annotation ready", "Review the composer before sending.");
+  }
+
+  attachOsSnapshot(pngBase64: string): void {
+    const sessionId = this.state.route.kind === "thread" ? this.state.route.sessionId : null;
+    if (!sessionId) {
+      this.toast("info", "Open a thread", "Snapshots attach to the composer inside a thread.");
+      return;
+    }
+    this.update((s) => ({
+      ...s,
+      draftHandoff: {
+        key: sessionId,
+        text: "Here is a screenshot of my screen:",
+        attachments: [{ name: "snapshot.png", mediaType: "image/png", base64: pngBase64 }],
+        previews: [],
+      },
+    }));
+    this.toast("info", "Snapshot attached", "Review the composer before sending.");
+  }
+
+  async toggleBrowserPick(sessionId: string, tabId: string, active: boolean): Promise<void> {
+    if (active) {
+      await this.client.startBrowserPick(sessionId, tabId);
+    } else {
+      await this.client.cancelBrowserPick(sessionId, tabId);
+    }
+    this.patchBrowser(sessionId, (b) => ({ ...b, pickActive: active }));
+  }
+
+  async captureBrowserScreenshot(sessionId: string, tabId: string): Promise<void> {
+    const shot = await this.client.captureBrowserScreenshot(sessionId, tabId);
+    this.attachBrowserPick(sessionId, { pngBase64: shot.pngBase64, text: "screenshot", selector: "viewport" });
+    try {
+      const blob = await fetch(`data:image/png;base64,${shot.pngBase64}`).then((r) => r.blob());
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    } catch {
+      /* clipboard may be denied in some shells */
+    }
+    this.toast("info", "Screenshot saved", "Copied image to clipboard.", {
+      label: "Reveal",
+      run: () => void this.revealPath(shot.path),
+    });
+  }
+
+  async toggleBrowserRecording(sessionId: string, tabId: string, recording: boolean): Promise<void> {
+    if (recording) {
+      await this.client.startBrowserRecording(sessionId, tabId);
+      this.patchBrowser(sessionId, (b) => ({ ...b, recording: true }));
+    } else {
+      const rec = await this.client.stopBrowserRecording(sessionId, tabId);
+      this.patchBrowser(sessionId, (b) => ({ ...b, recording: false }));
+      this.toast("info", "Recording saved", rec.path);
+    }
+  }
+
+  async openBrowserPip(sessionId: string, tabId: string): Promise<void> {
+    const pipUrl = this.client.browserPipUrl(sessionId, tabId);
+    if (this.browserPipOpener) {
+      await this.browserPipOpener(pipUrl);
+    } else {
+      window.open(pipUrl, "_blank", "noopener,noreferrer,width=480,height=300");
+    }
+  }
+
+  async resizeBrowserViewport(
+    sessionId: string,
+    tabId: string,
+    viewport: import("../types.js").BrowserTabSnapshot["viewport"],
+  ): Promise<void> {
+    const tab = await this.client.resizeBrowserTab(sessionId, tabId, viewport);
+    this.patchBrowser(sessionId, (b) => ({
+      ...b,
+      tabs: b.tabs.map((t) => (t.tabId === tabId ? tab : t)),
+    }));
+  }
+
+  async setBrowserAppearance(
+    sessionId: string,
+    tabId: string,
+    appearance: import("../types.js").BrowserTabSnapshot["colorScheme"],
+  ): Promise<void> {
+    const tab = await this.client.setBrowserAppearance(sessionId, tabId, appearance);
+    this.patchBrowser(sessionId, (b) => ({
+      ...b,
+      tabs: b.tabs.map((t) => (t.tabId === tabId ? tab : t)),
+    }));
+  }
+
+  async openBrowserDevTools(sessionId: string, tabId: string): Promise<void> {
+    await this.client.openBrowserDevTools(sessionId, tabId);
+    this.toast("info", "DevTools", "Opening Chromium DevTools in your default browser.");
+  }
+
+  setBrowserDownloadsOpen(sessionId: string, open: boolean): void {
+    this.patchBrowser(sessionId, (b) => ({ ...b, downloadsOpen: open }));
+  }
+
+  async refreshBrowserDownloads(sessionId: string): Promise<void> {
+    await this.client.listBrowserDownloads();
+    this.patchBrowser(sessionId, (b) => b);
+  }
+
+  async backBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    this.applyBrowserTab(sessionId, await this.client.backBrowserTab(sessionId, tabId));
+  }
+
+  async forwardBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    this.applyBrowserTab(sessionId, await this.client.forwardBrowserTab(sessionId, tabId));
+  }
+
+  async hardReloadBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    this.applyBrowserTab(sessionId, await this.client.hardReloadBrowserTab(sessionId, tabId));
+  }
+
+  async stopBrowserTab(sessionId: string, tabId: string): Promise<void> {
+    this.applyBrowserTab(sessionId, await this.client.stopBrowserTab(sessionId, tabId));
+  }
+
+  async toggleBrowserMute(sessionId: string, tabId: string): Promise<void> {
+    const tab = this.state.browser[sessionId]?.tabs.find((t) => t.tabId === tabId);
+    const muted = !(tab?.muted ?? false);
+    this.applyBrowserTab(sessionId, await this.client.setBrowserMuted(sessionId, tabId, muted));
+  }
+
+  async clearBrowserProfileData(profileId: string, what: "cookies" | "cache"): Promise<void> {
+    await this.client.clearBrowserProfileData(profileId, what);
+    this.toast("info", what === "cookies" ? "Cookies cleared" : "Cache cleared", `Profile ${profileId}`);
+  }
+
+  async removeBrowserHistoryEntry(sessionId: string, url: string): Promise<void> {
+    await this.client.removeBrowserHistoryEntry(sessionId, url);
+    const history = await this.client.listBrowserHistory(sessionId);
+    this.patchBrowser(sessionId, (b) => ({ ...b, history }));
+  }
+
+  async patchBrowserDefaults(patch: Partial<import("../client.js").BrowserDefaultsView>): Promise<void> {
+    const defaults = await this.client.patchBrowserDefaults(patch);
+    const sessionId = this.state.route.kind === "thread" ? this.state.route.sessionId : null;
+    if (sessionId) {
+      this.patchBrowser(sessionId, (b) => ({ ...b, defaults }));
+    }
+  }
+
+  async browserCanvasPointer(
+    sessionId: string,
+    tabId: string,
+    clientX: number,
+    clientY: number,
+    canvas: HTMLCanvasElement,
+  ): Promise<void> {
+    const rect = canvas.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((clientY - rect.top) / rect.height) * canvas.height;
+    await this.client.sendBrowserPointer(sessionId, tabId, x, y, canvas.width, canvas.height);
+    this.patchBrowser(sessionId, (b) => ({ ...b, controller: "human" }));
+  }
+
+  async probeBrowserContextMenu(
+    sessionId: string,
+    tabId: string,
+    clientX: number,
+    clientY: number,
+    canvas: HTMLCanvasElement,
+  ): Promise<import("../types.js").BrowserContextMenuProbe> {
+    const rect = canvas.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((clientY - rect.top) / rect.height) * canvas.height;
+    return await this.client.probeBrowserContextMenu(sessionId, tabId, x, y, canvas.width, canvas.height);
+  }
+
+  async runBrowserContextMenuAction(
+    sessionId: string,
+    tabId: string,
+    clientX: number,
+    clientY: number,
+    canvas: HTMLCanvasElement,
+    action: import("../types.js").BrowserContextMenuAction,
+  ): Promise<void> {
+    const rect = canvas.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * canvas.width;
+    const y = ((clientY - rect.top) / rect.height) * canvas.height;
+    await this.client.runBrowserContextMenuAction(sessionId, tabId, x, y, canvas.width, canvas.height, action);
+    this.patchBrowser(sessionId, (b) => ({ ...b, controller: "human" }));
+  }
+
   // ---------------------------------------------------------------- files
 
   /** Shows or hides the file viewer beside threads; it keeps each thread's open files either way. */
@@ -2832,6 +3346,13 @@ export class HeliconController {
     if (!cwd || !target || !target.path) {
       return false;
     }
+    const ext = target.path.split(".").pop()?.toLowerCase() ?? "";
+    if (ext === "html" || ext === "htm" || ext === "pdf") {
+      const previewUrl = this.client.fileUrl(cwd, target.path);
+      void this.openBrowserTab(sessionId, previewUrl);
+      this.setPrefs({ rightSideTab: "browser", browserOpen: true });
+      return true;
+    }
     this.patchPanel(sessionId, (panel) => ({
       tabs: panel.tabs.includes(target.path) ? panel.tabs : [...panel.tabs, target.path],
       active: target.path,
@@ -2839,7 +3360,7 @@ export class HeliconController {
       line: line ?? target.line,
     }));
     if (!this.state.prefs.filesOpen) {
-      this.setPrefs({ filesOpen: true });
+      this.setPrefs({ filesOpen: true, rightSideTab: "files" });
     }
     return true;
   }

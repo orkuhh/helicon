@@ -11,6 +11,8 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 use tauri::{Manager, Url, WebviewUrl, WebviewWindowBuilder};
+
+mod browser_cmds;
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
 
@@ -376,6 +378,16 @@ fn spawn_server(
     if let Some(path) = augmented_path(node) {
         cmd.env("PATH", path);
     }
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let node_modules = plain_path(&resource_dir.join("node_modules"));
+        if node_modules.is_dir() {
+            cmd.env("NODE_PATH", node_modules);
+        }
+    }
+    if std::env::var_os("HELICON_TEST_MUSE").is_some() {
+        cmd.env("HELICON_TEST_MUSE", "1");
+        cmd.env("HELICON_BROWSER_SKIP_DEVTOOLS_OPEN", "1");
+    }
     cmd.arg(server).arg("--port").arg(port.to_string());
     if let Some(frontend) = frontend {
         cmd.arg("--static").arg(frontend);
@@ -509,6 +521,11 @@ fn is_external_link(url: &Url) -> bool {
 
 fn main() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            browser_cmds::browser_pip_open,
+            browser_cmds::browser_pip_close,
+            browser_cmds::snap_shot_capture,
+        ])
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_notification::init())

@@ -48,7 +48,7 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev xvfb
       - run: npm ci
         if: steps.guard.outputs.ready == 'true'
-      - run: npm run build --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
+      - run: npm run build --workspace @helicon/browser --workspace @helicon/daemon --workspace @helicon/ui --workspace @helicon/server
         if: steps.guard.outputs.ready == 'true'
       - name: Build the AppImage
         if: steps.guard.outputs.ready == 'true'
